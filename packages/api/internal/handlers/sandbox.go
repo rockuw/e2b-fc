@@ -7,6 +7,11 @@ import (
 	"slices"
 	"time"
 
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.uber.org/zap"
+
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	"github.com/e2b-dev/infra/packages/api/internal/middleware/otel/tracing"
 	"github.com/e2b-dev/infra/packages/api/internal/orchestrator"
@@ -14,10 +19,6 @@ import (
 	typesteam "github.com/e2b-dev/infra/packages/auth/pkg/types"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
-	"github.com/google/uuid"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.uber.org/zap"
 )
 
 var tracer = otel.Tracer("github.com/e2b-dev/infra/packages/api/internal/handlers")

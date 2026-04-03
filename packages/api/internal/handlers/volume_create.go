@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	"github.com/e2b-dev/infra/packages/api/internal/clusters"
 	"github.com/e2b-dev/infra/packages/db/pkg/dberrors"
@@ -16,8 +19,6 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/ginutils"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 func (a *APIStore) PostVolumes(c *gin.Context) {

@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	dbtypes "github.com/e2b-dev/infra/packages/db/pkg/types"
-	proxygrpc "github.com/e2b-dev/infra/packages/shared/pkg/grpc/proxy"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/metadata"
+
+	dbtypes "github.com/e2b-dev/infra/packages/db/pkg/types"
+	proxygrpc "github.com/e2b-dev/infra/packages/shared/pkg/grpc/proxy"
 )
 
 func boolPtr(b bool) *bool { return &b }

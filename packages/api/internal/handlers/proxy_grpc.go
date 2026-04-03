@@ -8,6 +8,11 @@ import (
 	"strconv"
 	"time"
 
+	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
 	snapshotcache "github.com/e2b-dev/infra/packages/api/internal/cache/snapshots"
 	dbapi "github.com/e2b-dev/infra/packages/api/internal/db"
 	apiorchestrator "github.com/e2b-dev/infra/packages/api/internal/orchestrator"
@@ -19,10 +24,6 @@ import (
 	proxygrpc "github.com/e2b-dev/infra/packages/shared/pkg/grpc/proxy"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sharedutils "github.com/e2b-dev/infra/packages/shared/pkg/utils"
-	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 type SandboxService struct {

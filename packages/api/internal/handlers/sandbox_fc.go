@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	"github.com/e2b-dev/infra/packages/api/internal/provider"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
-
-	"github.com/gin-gonic/gin"
 )
 
 // SandboxHandlers contains handlers for sandbox operations using SandboxProvider.

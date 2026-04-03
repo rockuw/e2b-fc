@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	typesteam "github.com/e2b-dev/infra/packages/auth/pkg/types"
 	dbtypes "github.com/e2b-dev/infra/packages/db/pkg/types"
-	"github.com/stretchr/testify/require"
 )
 
 func testTeamWithMaxLengthHours(hours int64) *typesteam.Team {

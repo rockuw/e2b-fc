@@ -9,6 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	nomadapi "github.com/hashicorp/nomad/api"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+
 	analyticscollector "github.com/e2b-dev/infra/packages/api/internal/analytics_collector"
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	snapshotcache "github.com/e2b-dev/infra/packages/api/internal/cache/snapshots"
@@ -31,11 +37,6 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/logs/loki"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	sharedutils "github.com/e2b-dev/infra/packages/shared/pkg/utils"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	nomadapi "github.com/hashicorp/nomad/api"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
 var _ api.ServerInterface = (*APIStore)(nil)
