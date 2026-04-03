@@ -282,11 +282,13 @@ SessionConfig:
 - [ ] Sandbox auto-expires after TTL
 
 **Test Cases:**
-- Create sandbox → verify ID returned
-- List sandboxes → verify pagination works
-- Get sandbox info → verify correct state
-- Kill sandbox → verify it's deleted
+- Create sandbox using e2b SDK → verify ID returned
+- List sandboxes using e2b SDK → verify pagination works
+- Get sandbox info using e2b SDK → verify correct state
+- Kill sandbox using e2b SDK → verify it's deleted
 - Wait for TTL → verify auto-cleanup
+
+**Note**: Use vanilla e2b SDK for test cases to ensure compatibility.
 
 ### Phase 2: File System & Commands
 
