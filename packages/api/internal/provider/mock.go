@@ -1,5 +1,5 @@
-// Package providermock provides a mock implementation of SandboxProvider for testing.
-package providermock
+// Package provider provides a mock implementation of SandboxProvider for testing.
+package provider
 
 import (
 	"context"
@@ -7,14 +7,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/e2b-dev/infra/packages/api/internal/provider"
 )
 
 // MockProvider is a mock implementation of SandboxProvider for testing.
 type MockProvider struct {
 	mu        sync.RWMutex
-	sandboxes map[string]*provider.SandboxInfo
+	sandboxes map[string]*SandboxInfo
 
 	// CreateError can be set to return an error on Create
 	CreateError error
@@ -35,12 +33,12 @@ type MockProvider struct {
 // NewMockProvider creates a new mock provider.
 func NewMockProvider() *MockProvider {
 	return &MockProvider{
-		sandboxes: make(map[string]*provider.SandboxInfo),
+		sandboxes: make(map[string]*SandboxInfo),
 	}
 }
 
 // Create creates a new sandbox in memory.
-func (m *MockProvider) Create(ctx context.Context, config *provider.SandboxConfig) (*provider.SandboxInfo, error) {
+func (m *MockProvider) Create(ctx context.Context, config *SandboxConfig) (*SandboxInfo, error) {
 	if m.CreateError != nil {
 		return nil, m.CreateError
 	}
@@ -51,10 +49,10 @@ func (m *MockProvider) Create(ctx context.Context, config *provider.SandboxConfi
 	sandboxID := uuid.New().String()
 	now := time.Now()
 
-	info := &provider.SandboxInfo{
+	info := &SandboxInfo{
 		SandboxID:  sandboxID,
 		TemplateID: config.TemplateID,
-		State:      provider.SandboxStateRunning,
+		State:      SandboxStateRunning,
 		CreatedAt:  now,
 		ExpiresAt:  now.Add(config.Timeout),
 		Metadata:   config.Metadata,
@@ -66,7 +64,7 @@ func (m *MockProvider) Create(ctx context.Context, config *provider.SandboxConfi
 }
 
 // Get returns a sandbox by ID.
-func (m *MockProvider) Get(ctx context.Context, sandboxID string) (*provider.SandboxInfo, error) {
+func (m *MockProvider) Get(ctx context.Context, sandboxID string) (*SandboxInfo, error) {
 	if m.GetError != nil {
 		return nil, m.GetError
 	}
@@ -76,7 +74,7 @@ func (m *MockProvider) Get(ctx context.Context, sandboxID string) (*provider.San
 
 	info, ok := m.sandboxes[sandboxID]
 	if !ok {
-		return nil, provider.ErrSandboxNotFound
+		return nil, ErrSandboxNotFound
 	}
 
 	return info, nil
@@ -100,7 +98,7 @@ func (m *MockProvider) Delete(ctx context.Context, sandboxID string) error {
 }
 
 // List returns a paginated list of sandboxes.
-func (m *MockProvider) List(ctx context.Context, filter *provider.ListFilter) (*provider.ListResult, error) {
+func (m *MockProvider) List(ctx context.Context, filter *ListFilter) (*ListResult, error) {
 	if m.ListError != nil {
 		return nil, m.ListError
 	}
@@ -113,7 +111,7 @@ func (m *MockProvider) List(ctx context.Context, filter *provider.ListFilter) (*
 		limit = 10
 	}
 
-	var sandboxes []*provider.SandboxInfo
+	var sandboxes []*SandboxInfo
 	for _, info := range m.sandboxes {
 		if filter.TemplateID != "" && info.TemplateID != filter.TemplateID {
 			continue
@@ -122,7 +120,7 @@ func (m *MockProvider) List(ctx context.Context, filter *provider.ListFilter) (*
 	}
 
 	// Simple pagination - just return up to limit
-	result := &provider.ListResult{}
+	result := &ListResult{}
 	if len(sandboxes) > limit {
 		result.Sandboxes = sandboxes[:limit]
 		result.NextToken = "next"
@@ -134,7 +132,7 @@ func (m *MockProvider) List(ctx context.Context, filter *provider.ListFilter) (*
 }
 
 // Connect returns connection info for a sandbox.
-func (m *MockProvider) Connect(ctx context.Context, sandboxID string) (*provider.ConnectionInfo, error) {
+func (m *MockProvider) Connect(ctx context.Context, sandboxID string) (*ConnectionInfo, error) {
 	if m.ConnectError != nil {
 		return nil, m.ConnectError
 	}
@@ -143,10 +141,10 @@ func (m *MockProvider) Connect(ctx context.Context, sandboxID string) (*provider
 	defer m.mu.RUnlock()
 
 	if _, ok := m.sandboxes[sandboxID]; !ok {
-		return nil, provider.ErrSandboxNotFound
+		return nil, ErrSandboxNotFound
 	}
 
-	return &provider.ConnectionInfo{
+	return &ConnectionInfo{
 		Endpoint:     "http://localhost:49983",
 		AccessToken:  "test-token",
 		SessionID:    sandboxID,
@@ -164,7 +162,7 @@ func (m *MockProvider) Count() int {
 func (m *MockProvider) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.sandboxes = make(map[string]*provider.SandboxInfo)
+	m.sandboxes = make(map[string]*SandboxInfo)
 	m.CreateError = nil
 	m.GetError = nil
 	m.DeleteError = nil
