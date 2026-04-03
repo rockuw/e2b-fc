@@ -2,7 +2,6 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -27,51 +26,70 @@ func NewSandboxHandlers(p provider.SandboxProvider) *SandboxHandlers {
 // PostSandboxes creates a new sandbox.
 // POST /sandboxes
 func (h *SandboxHandlers) PostSandboxes(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var req api.PostSandboxesJSONRequestBody
+	var req api.NewSandbox
 	if err := c.ShouldBindJSON(&req); err != nil {
+		telemetry.ReportError(c.Request.Context(), "failed to parse request", err)
 		c.JSON(http.StatusBadRequest, api.Error{
-			Message: ptr(fmt.Sprintf("Invalid request: %s", err)),
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Invalid request: %s", err),
 		})
 		return
 	}
 
-	telemetry.ReportEvent(ctx, "Parsed create sandbox request")
+	telemetry.ReportEvent(c.Request.Context(), "Parsed create sandbox request")
 
 	// Convert request to provider config
-	timeout := 3600 // Default 1 hour
+	timeout := int32(3600) // Default 1 hour
 	if req.Timeout != nil {
-		timeout = int(*req.Timeout)
+		timeout = *req.Timeout
+	}
+
+	// Convert metadata and envVars from pointer types
+	var metadata map[string]string
+	if req.Metadata != nil {
+		metadata = *req.Metadata
+	}
+
+	var envVars map[string]string
+	if req.EnvVars != nil {
+		envVars = *req.EnvVars
 	}
 
 	config := &provider.SandboxConfig{
-		TemplateID: req.TemplateId,
+		TemplateID: req.TemplateID,
 		Timeout:    time.Duration(timeout) * time.Second,
-		Metadata:   req.Metadata,
-		EnvVars:    req.EnvVars,
+		Metadata:   metadata,
+		EnvVars:    envVars,
 	}
 
 	// Create sandbox via provider
-	info, err := h.provider.Create(ctx, config)
+	info, err := h.provider.Create(c.Request.Context(), config)
 	if err != nil {
-		telemetry.ReportError(ctx, "failed to create sandbox", err)
+		telemetry.ReportError(c.Request.Context(), "failed to create sandbox", err)
 		c.JSON(http.StatusInternalServerError, api.Error{
-			Message: ptr(fmt.Sprintf("Failed to create sandbox: %s", err)),
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to create sandbox: %s", err),
 		})
 		return
 	}
 
-	telemetry.ReportEvent(ctx, "Created sandbox")
+	telemetry.ReportEvent(c.Request.Context(), "Created sandbox")
+
+	// Get connection info for access tokens
+	connInfo, err := h.provider.Connect(c.Request.Context(), info.SandboxID)
+	if err != nil {
+		telemetry.ReportError(c.Request.Context(), "failed to get connection info", err)
+		// Still return the sandbox, but without access tokens
+		connInfo = &provider.ConnectionInfo{}
+	}
 
 	// Convert to API response
 	response := api.Sandbox{
-		SandboxId:  &info.SandboxID,
-		TemplateId: &info.TemplateID,
-		Status:     ptr(string(info.State)),
-		CreatedAt:  ptr(info.CreatedAt.Format(time.RFC3339)),
-		ExpiresAt:  ptr(info.ExpiresAt.Format(time.RFC3339)),
-		Metadata:   info.Metadata,
+		SandboxID:          info.SandboxID,
+		TemplateID:         info.TemplateID,
+		ClientID:           info.SandboxID, // Use sandbox ID as client ID for FC
+		EnvdAccessToken:    &connInfo.AccessToken,
+		TrafficAccessToken: &connInfo.AccessToken,
 	}
 
 	c.JSON(http.StatusCreated, response)
@@ -80,38 +98,35 @@ func (h *SandboxHandlers) PostSandboxes(c *gin.Context) {
 // GetSandboxes lists sandboxes.
 // GET /sandboxes
 func (h *SandboxHandlers) GetSandboxes(c *gin.Context) {
-	ctx := c.Request.Context()
-
 	// Parse query parameters
 	var params api.GetSandboxesParams
 	if err := c.ShouldBindQuery(&params); err != nil {
 		c.JSON(http.StatusBadRequest, api.Error{
-			Message: ptr(fmt.Sprintf("Invalid query: %s", err)),
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Invalid query: %s", err),
 		})
 		return
 	}
 
-	// Build filter
-	limit := int32(10)
-	if params.Limit != nil {
-		limit = *params.Limit
-	}
-
+	// Build filter - use default limit since API doesn't support pagination params
 	filter := &provider.ListFilter{
-		Limit:     limit,
+		Limit:     100, // Default limit
 		NextToken: "",
 	}
 
-	if params.TemplateId != nil {
-		filter.TemplateID = *params.TemplateId
+	// Parse metadata filter if provided
+	if params.Metadata != nil && *params.Metadata != "" {
+		// For now, we don't filter by metadata at the provider level
+		// This could be enhanced later
 	}
 
 	// List sandboxes via provider
-	result, err := h.provider.List(ctx, filter)
+	result, err := h.provider.List(c.Request.Context(), filter)
 	if err != nil {
-		telemetry.ReportError(ctx, "failed to list sandboxes", err)
+		telemetry.ReportError(c.Request.Context(), "failed to list sandboxes", err)
 		c.JSON(http.StatusInternalServerError, api.Error{
-			Message: ptr(fmt.Sprintf("Failed to list sandboxes: %s", err)),
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to list sandboxes: %s", err),
 		})
 		return
 	}
@@ -120,12 +135,9 @@ func (h *SandboxHandlers) GetSandboxes(c *gin.Context) {
 	sandboxes := make([]api.Sandbox, 0, len(result.Sandboxes))
 	for _, info := range result.Sandboxes {
 		sandboxes = append(sandboxes, api.Sandbox{
-			SandboxId:  &info.SandboxID,
-			TemplateId: &info.TemplateID,
-			Status:     ptr(string(info.State)),
-			CreatedAt:  ptr(info.CreatedAt.Format(time.RFC3339)),
-			ExpiresAt:  ptr(info.ExpiresAt.Format(time.RFC3339)),
-			Metadata:   info.Metadata,
+			SandboxID:  info.SandboxID,
+			TemplateID: info.TemplateID,
+			ClientID:   info.SandboxID,
 		})
 	}
 
@@ -135,32 +147,37 @@ func (h *SandboxHandlers) GetSandboxes(c *gin.Context) {
 // GetSandboxesSandboxID gets a sandbox by ID.
 // GET /sandboxes/{sandboxID}
 func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string) {
-	ctx := c.Request.Context()
-
 	// Get sandbox via provider
-	info, err := h.provider.Get(ctx, sandboxID)
+	info, err := h.provider.Get(c.Request.Context(), sandboxID)
 	if err != nil {
 		if err == provider.ErrSandboxNotFound {
 			c.JSON(http.StatusNotFound, api.Error{
-				Message: ptr("Sandbox not found"),
+				Code:    http.StatusNotFound,
+				Message: "Sandbox not found",
 			})
 			return
 		}
-		telemetry.ReportError(ctx, "failed to get sandbox", err)
+		telemetry.ReportError(c.Request.Context(), "failed to get sandbox", err)
 		c.JSON(http.StatusInternalServerError, api.Error{
-			Message: ptr(fmt.Sprintf("Failed to get sandbox: %s", err)),
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to get sandbox: %s", err),
 		})
 		return
 	}
 
+	// Get connection info
+	connInfo, err := h.provider.Connect(c.Request.Context(), info.SandboxID)
+	if err != nil {
+		connInfo = &provider.ConnectionInfo{}
+	}
+
 	// Convert to API response
 	response := api.Sandbox{
-		SandboxId:  &info.SandboxID,
-		TemplateId: &info.TemplateID,
-		Status:     ptr(string(info.State)),
-		CreatedAt:  ptr(info.CreatedAt.Format(time.RFC3339)),
-		ExpiresAt:  ptr(info.ExpiresAt.Format(time.RFC3339)),
-		Metadata:   info.Metadata,
+		SandboxID:          info.SandboxID,
+		TemplateID:         info.TemplateID,
+		ClientID:           info.SandboxID,
+		EnvdAccessToken:    &connInfo.AccessToken,
+		TrafficAccessToken: &connInfo.AccessToken,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -169,31 +186,25 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 // DeleteSandboxesSandboxID deletes a sandbox.
 // DELETE /sandboxes/{sandboxID}
 func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID string) {
-	ctx := c.Request.Context()
-
 	// Delete sandbox via provider
-	err := h.provider.Delete(ctx, sandboxID)
+	err := h.provider.Delete(c.Request.Context(), sandboxID)
 	if err != nil {
 		if err == provider.ErrSandboxNotFound {
 			c.JSON(http.StatusNotFound, api.Error{
-				Message: ptr("Sandbox not found"),
+				Code:    http.StatusNotFound,
+				Message: "Sandbox not found",
 			})
 			return
 		}
-		telemetry.ReportError(ctx, "failed to delete sandbox", err)
+		telemetry.ReportError(c.Request.Context(), "failed to delete sandbox", err)
 		c.JSON(http.StatusInternalServerError, api.Error{
-			Message: ptr(fmt.Sprintf("Failed to delete sandbox: %s", err)),
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to delete sandbox: %s", err),
 		})
 		return
 	}
 
-	telemetry.ReportEvent(ctx, "Deleted sandbox")
+	telemetry.ReportEvent(c.Request.Context(), "Deleted sandbox")
 
 	c.Status(http.StatusNoContent)
-}
-
-// Helper functions
-
-func ptr[T any](v T) *T {
-	return &v
 }

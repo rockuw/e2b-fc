@@ -90,7 +90,7 @@ func (m *MockProvider) Delete(ctx context.Context, sandboxID string) error {
 	defer m.mu.Unlock()
 
 	if _, ok := m.sandboxes[sandboxID]; !ok {
-		return provider.ErrSandboxNotFound
+		return ErrSandboxNotFound
 	}
 
 	delete(m.sandboxes, sandboxID)
