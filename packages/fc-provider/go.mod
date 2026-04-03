@@ -1,6 +1,6 @@
 module github.com/e2b-dev/infra/packages/fc-provider
 
-go 1.22
+go 1.25.4
 
 require (
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.0.10
