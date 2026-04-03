@@ -78,9 +78,9 @@ Based on the Tencent Cloud documentation, the following features are required:
 │                              E2B-FC Service Layer                                 │
 │  ┌────────────────────────────────────────────────────────────────────────────┐  │
 │  │                           API Gateway (Gin)                                 │  │
-│  │   - Authentication (API Key, Access Token, Supabase)                       │  │
 │  │   - Rate Limiting                                                          │  │
 │  │   - Request Validation (OpenAPI)                                           │  │
+│  │   - Logging & Telemetry                                                    │  │
 │  └────────────────────────────────────────────────────────────────────────────┘  │
 │                                        │                                          │
 │  ┌────────────────────────────────────────────────────────────────────────────┐  │
@@ -116,16 +116,18 @@ Based on the Tencent Cloud documentation, the following features are required:
 
 #### 1. API Gateway (packages/api)
 Reuse existing API code with modifications:
-- Keep: Authentication, OpenAPI validation, rate limiting, logging, telemetry
+- Keep: OpenAPI validation, rate limiting, logging, telemetry
 - Modify: Sandbox handlers to use FC Session instead of orchestrator
 - Remove: Firecracker-specific code (NBD, networking, template caching)
+- **Note**: Authentication skipped for initial implementation
 
 #### 2. Sandbox Manager
 New component responsible for:
 - Managing sandbox lifecycle via FC Session API
-- Tracking session IDs and mapping to sandbox IDs
-- Handling session TTL and idle timeout
+- **Session ID = Sandbox ID** (no separate mapping needed)
 - Coordinating with FC for session affinity
+
+**Note**: Session TTL and idle timeout are managed by FC automatically.
 
 #### 3. FC Session Client
 New component wrapping Aliyun FC SDK:
@@ -182,12 +184,14 @@ Aliyun FC Session provides two modes:
 ```
 E2B API                          FC Session API
 ─────────────────────────────────────────────────────────────
-POST /sandboxes              →   CreateSession + InvokeFunction
+POST /sandboxes              →   CreateSession
 GET /sandboxes               →   ListSessions
 GET /sandboxes/:id           →   GetSession
 DELETE /sandboxes/:id        →   DeleteSession
-POST /sandboxes/:id/refresh  →   (Reset SessionIdleTimeout)
+POST /sandboxes/:id/refresh  →   Any request to session resets idle timeout
 ```
+
+**Note**: `CreateSession` creates the session. The function is invoked on first request to the session endpoint, which initializes envd.
 
 ---
 
@@ -263,13 +267,26 @@ SessionConfig:
 2. **Session Manager**
    - Implement FC Session client wrapper
    - Session lifecycle management
-   - Session ID to sandbox ID mapping
 
 3. **Basic API Endpoints**
    - POST /sandboxes (create)
    - GET /sandboxes (list)
    - GET /sandboxes/:id (get info)
    - DELETE /sandboxes/:id (kill)
+
+**Acceptance Criteria:**
+- [ ] Can create a sandbox and get sandbox ID
+- [ ] Can list sandboxes with pagination
+- [ ] Can get sandbox info by ID
+- [ ] Can kill a sandbox
+- [ ] Sandbox auto-expires after TTL
+
+**Test Cases:**
+- Create sandbox → verify ID returned
+- List sandboxes → verify pagination works
+- Get sandbox info → verify correct state
+- Kill sandbox → verify it's deleted
+- Wait for TTL → verify auto-cleanup
 
 ### Phase 2: File System & Commands
 
@@ -321,21 +338,21 @@ SessionConfig:
 
 ### 2. Template Management
 
-**Decision**: Templates are FC function versions/aliases
+**Decision**: One template = one FC function
 
 **Rationale**:
-- FC already supports function versioning
-- Alias provides template naming
-- Natural fit for template concept
+- FC function represents a template directly
+- No alias complexity needed
+- Built-in templates only (code-interpreter-v1, browser-v1, etc.)
 
 ### 3. State Storage
 
-**Decision**: Use Redis for session state cache + FC API for source of truth
+**Decision**: Query FC API directly, no cache layer
 
 **Rationale**:
-- Fast lookups for frequent operations
-- FC API for authoritative state
-- Compatible with existing architecture
+- FC API is the source of truth
+- Simpler architecture without cache
+- Avoids cache inconsistency issues
 
 ### 4. Streaming Strategy
 
@@ -354,26 +371,17 @@ SessionConfig:
 |------|--------|------------|
 | FC cold start latency | User experience | Use session keepalive, provisioned concurrency |
 | Session timeout limits | Long-running tasks | Implement checkpoint/resume pattern |
-| No pause/resume native support | API compatibility | Implement soft pause (disconnect, keep session) |
 | File persistence | Multi-request files | Use OSS for persistent storage |
 
 ---
 
-## Open Questions
+## Design Decisions (Resolved)
 
-1. **Pause/Resume Support**: FC Session doesn't natively support pause. Should we:
-   - Implement "soft pause" (disconnect, keep session alive)?
-   - Use snapshot mechanism if available?
-   - Mark as unsupported?
+1. **Pause/Resume Support**: Not supported in initial implementation. FC Session doesn't natively support pause.
 
-2. **Template Customization**: How to handle user-defined templates?
-   - Build custom FC functions?
-   - Use init containers?
+2. **Template Customization**: No custom templates. Only built-in templates (code-interpreter-v1, browser-v1, etc.).
 
-3. **Resource Limits**: What are the FC Session resource constraints?
-   - Max memory?
-   - Max disk?
-   - Network access?
+3. **Resource Limits**: Same as FC function constraints (memory, timeout, etc.).
 
 ---
 
