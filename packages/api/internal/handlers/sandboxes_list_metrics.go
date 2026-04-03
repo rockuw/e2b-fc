@@ -5,12 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
-	"go.opentelemetry.io/otel/attribute"
-	"go.uber.org/zap"
-
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	"github.com/e2b-dev/infra/packages/api/internal/utils"
 	"github.com/e2b-dev/infra/packages/auth/pkg/auth"
@@ -18,6 +12,11 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"go.opentelemetry.io/otel/attribute"
+	"go.uber.org/zap"
 )
 
 const maxSandboxMetricsCount = 100

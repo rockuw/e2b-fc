@@ -93,7 +93,7 @@ func TestMockProvider_List(t *testing.T) {
 	ctx := context.Background()
 
 	// Create multiple sandboxes
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		config := &SandboxConfig{
 			TemplateID: "code-interpreter-v1",
 			Timeout:    time.Hour,

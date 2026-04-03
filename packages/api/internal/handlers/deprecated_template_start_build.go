@@ -6,11 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/posthog/posthog-go"
-	"go.opentelemetry.io/otel/attribute"
-
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	dbapi "github.com/e2b-dev/infra/packages/api/internal/db"
 	templatemanager "github.com/e2b-dev/infra/packages/api/internal/template-manager"
@@ -23,6 +18,10 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/templates"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/posthog/posthog-go"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // CheckAndCancelConcurrentBuilds checks for concurrent builds and cancels them if found

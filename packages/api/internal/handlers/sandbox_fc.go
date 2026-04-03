@@ -2,15 +2,15 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	"github.com/e2b-dev/infra/packages/api/internal/provider"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
+	"github.com/gin-gonic/gin"
 )
 
 // SandboxHandlers contains handlers for sandbox operations using SandboxProvider.
@@ -150,7 +150,7 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 	// Get sandbox via provider
 	info, err := h.provider.Get(c.Request.Context(), sandboxID)
 	if err != nil {
-		if err == provider.ErrSandboxNotFound {
+		if errors.Is(err, provider.ErrSandboxNotFound) {
 			c.JSON(http.StatusNotFound, api.Error{
 				Code:    http.StatusNotFound,
 				Message: "Sandbox not found",
@@ -189,7 +189,7 @@ func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID str
 	// Delete sandbox via provider
 	err := h.provider.Delete(c.Request.Context(), sandboxID)
 	if err != nil {
-		if err == provider.ErrSandboxNotFound {
+		if errors.Is(err, provider.ErrSandboxNotFound) {
 			c.JSON(http.StatusNotFound, api.Error{
 				Code:    http.StatusNotFound,
 				Message: "Sandbox not found",

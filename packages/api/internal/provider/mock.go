@@ -145,9 +145,9 @@ func (m *MockProvider) Connect(ctx context.Context, sandboxID string) (*Connecti
 	}
 
 	return &ConnectionInfo{
-		Endpoint:     "http://localhost:49983",
-		AccessToken:  "test-token",
-		SessionID:    sandboxID,
+		Endpoint:    "http://localhost:49983",
+		AccessToken: "test-token",
+		SessionID:   sandboxID,
 	}, nil
 }
 
