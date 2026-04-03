@@ -38,7 +38,7 @@ func NewMockProvider() *MockProvider {
 }
 
 // Create creates a new sandbox in memory.
-func (m *MockProvider) Create(ctx context.Context, config *SandboxConfig) (*SandboxInfo, error) {
+func (m *MockProvider) Create(_ context.Context, config *SandboxConfig) (*SandboxInfo, error) {
 	if m.CreateError != nil {
 		return nil, m.CreateError
 	}
@@ -64,7 +64,7 @@ func (m *MockProvider) Create(ctx context.Context, config *SandboxConfig) (*Sand
 }
 
 // Get returns a sandbox by ID.
-func (m *MockProvider) Get(ctx context.Context, sandboxID string) (*SandboxInfo, error) {
+func (m *MockProvider) Get(_ context.Context, sandboxID string) (*SandboxInfo, error) {
 	if m.GetError != nil {
 		return nil, m.GetError
 	}
@@ -81,7 +81,7 @@ func (m *MockProvider) Get(ctx context.Context, sandboxID string) (*SandboxInfo,
 }
 
 // Delete removes a sandbox by ID.
-func (m *MockProvider) Delete(ctx context.Context, sandboxID string) error {
+func (m *MockProvider) Delete(_ context.Context, sandboxID string) error {
 	if m.DeleteError != nil {
 		return m.DeleteError
 	}
@@ -94,11 +94,12 @@ func (m *MockProvider) Delete(ctx context.Context, sandboxID string) error {
 	}
 
 	delete(m.sandboxes, sandboxID)
+
 	return nil
 }
 
 // List returns a paginated list of sandboxes.
-func (m *MockProvider) List(ctx context.Context, filter *ListFilter) (*ListResult, error) {
+func (m *MockProvider) List(_ context.Context, filter *ListFilter) (*ListResult, error) {
 	if m.ListError != nil {
 		return nil, m.ListError
 	}
@@ -132,7 +133,7 @@ func (m *MockProvider) List(ctx context.Context, filter *ListFilter) (*ListResul
 }
 
 // Connect returns connection info for a sandbox.
-func (m *MockProvider) Connect(ctx context.Context, sandboxID string) (*ConnectionInfo, error) {
+func (m *MockProvider) Connect(_ context.Context, sandboxID string) (*ConnectionInfo, error) {
 	if m.ConnectError != nil {
 		return nil, m.ConnectError
 	}
@@ -155,6 +156,7 @@ func (m *MockProvider) Connect(ctx context.Context, sandboxID string) (*Connecti
 func (m *MockProvider) Count() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return len(m.sandboxes)
 }
 

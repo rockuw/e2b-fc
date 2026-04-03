@@ -10,6 +10,7 @@ import (
 )
 
 func TestMockProvider_Create(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -30,6 +31,7 @@ func TestMockProvider_Create(t *testing.T) {
 }
 
 func TestMockProvider_Get(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -50,6 +52,7 @@ func TestMockProvider_Get(t *testing.T) {
 }
 
 func TestMockProvider_Get_NotFound(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -59,6 +62,7 @@ func TestMockProvider_Get_NotFound(t *testing.T) {
 }
 
 func TestMockProvider_Delete(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -80,6 +84,7 @@ func TestMockProvider_Delete(t *testing.T) {
 }
 
 func TestMockProvider_Delete_NotFound(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -89,6 +94,7 @@ func TestMockProvider_Delete_NotFound(t *testing.T) {
 }
 
 func TestMockProvider_List(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -110,6 +116,7 @@ func TestMockProvider_List(t *testing.T) {
 }
 
 func TestMockProvider_List_WithTemplateFilter(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -134,6 +141,7 @@ func TestMockProvider_List_WithTemplateFilter(t *testing.T) {
 }
 
 func TestMockProvider_Connect(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -155,6 +163,7 @@ func TestMockProvider_Connect(t *testing.T) {
 }
 
 func TestMockProvider_Connect_NotFound(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 
@@ -164,6 +173,7 @@ func TestMockProvider_Connect_NotFound(t *testing.T) {
 }
 
 func TestMockProvider_ErrorHandling(t *testing.T) {
+	t.Parallel()
 	p := NewMockProvider()
 	ctx := context.Background()
 

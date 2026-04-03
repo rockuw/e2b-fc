@@ -10,6 +10,7 @@ import (
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	"github.com/e2b-dev/infra/packages/api/internal/provider"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,6 +34,7 @@ func (h *SandboxHandlers) PostSandboxes(c *gin.Context) {
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid request: %s", err),
 		})
+
 		return
 	}
 
@@ -70,6 +72,7 @@ func (h *SandboxHandlers) PostSandboxes(c *gin.Context) {
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to create sandbox: %s", err),
 		})
+
 		return
 	}
 
@@ -105,6 +108,7 @@ func (h *SandboxHandlers) GetSandboxes(c *gin.Context) {
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid query: %s", err),
 		})
+
 		return
 	}
 
@@ -114,11 +118,8 @@ func (h *SandboxHandlers) GetSandboxes(c *gin.Context) {
 		NextToken: "",
 	}
 
-	// Parse metadata filter if provided
-	if params.Metadata != nil && *params.Metadata != "" {
-		// For now, we don't filter by metadata at the provider level
-		// This could be enhanced later
-	}
+	// Note: Metadata filtering is not yet implemented at the provider level
+	_ = params.Metadata
 
 	// List sandboxes via provider
 	result, err := h.provider.List(c.Request.Context(), filter)
@@ -128,6 +129,7 @@ func (h *SandboxHandlers) GetSandboxes(c *gin.Context) {
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to list sandboxes: %s", err),
 		})
+
 		return
 	}
 
@@ -155,6 +157,7 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 				Code:    http.StatusNotFound,
 				Message: "Sandbox not found",
 			})
+
 			return
 		}
 		telemetry.ReportError(c.Request.Context(), "failed to get sandbox", err)
@@ -162,6 +165,7 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to get sandbox: %s", err),
 		})
+
 		return
 	}
 
@@ -194,6 +198,7 @@ func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID str
 				Code:    http.StatusNotFound,
 				Message: "Sandbox not found",
 			})
+
 			return
 		}
 		telemetry.ReportError(c.Request.Context(), "failed to delete sandbox", err)
@@ -201,6 +206,7 @@ func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID str
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to delete sandbox: %s", err),
 		})
+
 		return
 	}
 
