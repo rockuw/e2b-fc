@@ -109,8 +109,10 @@ func (p *FCProvider) Create(ctx context.Context, config *provider.SandboxConfig)
 		FunctionName: &functionName,
 		SessionId:    &sessionID,
 		SessionTTL:   &timeout,
+		// Set idle timeout (default 30 minutes)
+		SessionIdleTimeout: teaInt64(p.config.DefaultIdleTimeout),
 		// Use isolation mode for complete sandbox isolation
-		SessionMode:  tea.String("isolation"),
+		SessionMode: tea.String("isolation"),
 		// Use HeaderField affinity with x-session-id
 		SessionAffinity: tea.String("HeaderField"),
 	}
@@ -256,19 +258,26 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 
 // Connect returns connection info for a sandbox.
 func (p *FCProvider) Connect(ctx context.Context, sandboxID string) (*provider.ConnectionInfo, error) {
-	// First verify the sandbox exists
-	_, err := p.Get(ctx, sandboxID)
+	// First verify the sandbox exists and get its details
+	info, err := p.Get(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Build the session endpoint URL
-	// Format: https://{account-id}.{region}.fc.aliyuncs.com/{function-name}?session-id={session-id}
-	endpoint := fmt.Sprintf("%s/%s", p.endpoint, sandboxID)
+	// Build the FC function invocation URL
+	// Format: https://{account-id}.{region}.fc.aliyuncs.com/2016-08-15/proxy/{function-name}/
+	// Requests to this URL with x-session-id header will be routed to the session's instance
+	functionName := info.TemplateID
+	endpoint := fmt.Sprintf("https://%s.%s.fc.aliyuncs.com/2016-08-15/proxy/%s/", p.config.AccountID, p.config.Region, functionName)
+
+	// The access token for envd authentication
+	// In FC Session, this is typically provided via the session's environment or metadata
+	// For now, we use a placeholder that will be replaced with actual token from FC
+	accessToken := fmt.Sprintf("fc-session-%s", sandboxID)
 
 	return &provider.ConnectionInfo{
 		Endpoint:     endpoint,
-		AccessToken:  "", // FC will provide this via session
+		AccessToken:  accessToken,
 		SessionID:    sandboxID,
 	}, nil
 }
@@ -291,4 +300,9 @@ func getValue(s *string) string {
 // tea.String is a helper from Aliyun SDK
 func tea.String(s string) *string {
 	return &s
+}
+
+// tea.Int64 is a helper from Aliyun SDK
+func teaInt64(n int64) *int64 {
+	return &n
 }
