@@ -54,10 +54,10 @@ func TestFCProvider_CreateSession(t *testing.T) {
 		t.Skip("FC_ACCESS_KEY_ID not set, skipping real FC test")
 	}
 
-	// Get function name from env or use default
+	// Get function name from env or use default (test-sandbox is deployed by default)
 	functionName := os.Getenv("FC_TEST_FUNCTION")
 	if functionName == "" {
-		t.Skip("FC_TEST_FUNCTION not set, skipping create session test")
+		functionName = "test-sandbox" // Default test function
 	}
 
 	config := ConfigFromEnv()
