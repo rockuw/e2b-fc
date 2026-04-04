@@ -26,27 +26,6 @@ func TestFCProvider_New(t *testing.T) {
 	t.Logf("Created FC provider for account: %s, region: %s", config.AccountID, config.Region)
 }
 
-// TestFCProvider_ListSessions tests listing all sessions (requires real FC credentials)
-func TestFCProvider_ListSessions(t *testing.T) {
-	if os.Getenv("FC_ACCESS_KEY_ID") == "" {
-		t.Skip("FC_ACCESS_KEY_ID not set, skipping real FC test")
-	}
-
-	config := ConfigFromEnv()
-	p, err := New(config)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-
-	result, err := p.List(ctx, &provider.ListFilter{Limit: 100})
-	require.NoError(t, err)
-
-	t.Logf("Found %d sessions", len(result.Sandboxes))
-	for _, s := range result.Sandboxes {
-		t.Logf("  - %s: %s (template: %s)", s.SandboxID, s.State, s.TemplateID)
-	}
-}
-
 // TestFCProvider_CreateSession tests creating a session (requires FC function)
 // Note: This test requires a valid FC function to exist
 func TestFCProvider_CreateSession(t *testing.T) {

@@ -7,7 +7,7 @@ vars:
 
 resources:
   test_sandbox:
-    component: fc3 
+    component: fc3
     props:
       region: ${vars.region}
       functionName: "test-sandbox"
@@ -17,8 +17,10 @@ resources:
       role: 'acs:ram::1237050315505682:role/admin-to-fc'
       handler: index.handler
       memorySize: 512
-      timeout: 60
-      instanceConcurrency: 1
+      timeout: 300
+      instanceConcurrency: 10
+      # Session affinity config is set via API since s.yaml doesn't support it yet
+      # Use: go run update_session_config.go to set sessionAffinity=HEADER_FIELD
       triggers:
         - triggerName: httpTrigger
           triggerType: http
