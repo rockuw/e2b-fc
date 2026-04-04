@@ -19,8 +19,8 @@ resources:
       memorySize: 512
       timeout: 300
       instanceConcurrency: 10
-      # Session affinity config is set via API since s.yaml doesn't support it yet
-      # Use: go run update_session_config.go to set sessionAffinity=HEADER_FIELD
+      # Enable session affinity for session mode
+      sessionAffinity: HEADER_FIELD
       triggers:
         - triggerName: httpTrigger
           triggerType: http
