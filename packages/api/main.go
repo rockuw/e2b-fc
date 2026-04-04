@@ -307,6 +307,15 @@ func runFCMode(
 		sandboxes.POST("/:sandboxID/commands", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
 			sandboxHandlers.PostSandboxesSandboxIDCommands(c, c.Param("sandboxID"))
 		})
+		sandboxes.GET("/:sandboxID/files", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.GetSandboxesSandboxIDFiles(c, c.Param("sandboxID"))
+		})
+		sandboxes.POST("/:sandboxID/files", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.PostSandboxesSandboxIDFiles(c, c.Param("sandboxID"))
+		})
+		sandboxes.GET("/:sandboxID/dir", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.GetSandboxesSandboxIDDir(c, c.Param("sandboxID"))
+		})
 	}
 
 	// V2 endpoints for e2b SDK compatibility

@@ -369,3 +369,138 @@ func (h *SandboxHandlers) PostSandboxesSandboxIDCommands(c *gin.Context, sandbox
 
 	c.JSON(http.StatusOK, response)
 }
+
+// FileRequest represents a request to read/write a file.
+type FileRequest struct {
+	// Path is the file path
+	Path string `json:"path" binding:"required"`
+	// Content is the file content (for write)
+	Content string `json:"content"`
+}
+
+// FileResponse represents the response for file operations.
+type FileResponse struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	IsDir   bool   `json:"is_dir"`
+	Size    int64  `json:"size"`
+}
+
+// GetSandboxesSandboxIDFiles reads a file from a sandbox.
+// GET /sandboxes/{sandboxID}/files?path=/workspace/file.txt
+func (h *SandboxHandlers) GetSandboxesSandboxIDFiles(c *gin.Context, sandboxID string) {
+	ctx := c.Request.Context()
+
+	// Get file path from query
+	path := c.Query("path")
+	if path == "" {
+		c.JSON(http.StatusBadRequest, api.Error{
+			Code:    http.StatusBadRequest,
+			Message: "path query parameter is required",
+		})
+		return
+	}
+
+	// Read file
+	content, err := h.provider.ReadFile(ctx, sandboxID, path)
+	if err != nil {
+		if errors.Is(err, provider.ErrSandboxNotFound) {
+			c.JSON(http.StatusNotFound, api.Error{
+				Code:    http.StatusNotFound,
+				Message: "Sandbox not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to read file: %s", err),
+		})
+		return
+	}
+
+	response := FileResponse{
+		Path:    path,
+		Content: string(content),
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// PostSandboxesSandboxIDFiles writes a file to a sandbox.
+// POST /sandboxes/{sandboxID}/files
+func (h *SandboxHandlers) PostSandboxesSandboxIDFiles(c *gin.Context, sandboxID string) {
+	ctx := c.Request.Context()
+
+	// Parse request
+	var req FileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, api.Error{
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Invalid request: %s", err),
+		})
+		return
+	}
+
+	// Write file
+	err := h.provider.WriteFile(ctx, sandboxID, req.Path, []byte(req.Content))
+	if err != nil {
+		if errors.Is(err, provider.ErrSandboxNotFound) {
+			c.JSON(http.StatusNotFound, api.Error{
+				Code:    http.StatusNotFound,
+				Message: "Sandbox not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to write file: %s", err),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"path": req.Path,
+		"size": len(req.Content),
+	})
+}
+
+// GetSandboxesSandboxIDDir lists directory contents.
+// GET /sandboxes/{sandboxID}/dir?path=/workspace
+func (h *SandboxHandlers) GetSandboxesSandboxIDDir(c *gin.Context, sandboxID string) {
+	ctx := c.Request.Context()
+
+	// Get directory path from query
+	path := c.Query("path")
+	if path == "" {
+		path = "/workspace"
+	}
+
+	// List directory
+	files, err := h.provider.ListDir(ctx, sandboxID, path)
+	if err != nil {
+		if errors.Is(err, provider.ErrSandboxNotFound) {
+			c.JSON(http.StatusNotFound, api.Error{
+				Code:    http.StatusNotFound,
+				Message: "Sandbox not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to list directory: %s", err),
+		})
+		return
+	}
+
+	// Convert to response
+	response := make([]FileResponse, 0, len(files))
+	for _, f := range files {
+		response = append(response, FileResponse{
+			Path:  f.Path,
+			IsDir: f.IsDir,
+			Size:  f.Size,
+		})
+	}
+
+	c.JSON(http.StatusOK, response)
+}

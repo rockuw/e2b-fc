@@ -196,3 +196,45 @@ func (m *MockProvider) RunCommand(_ context.Context, sandboxID string, config *C
 		Stderr:   "",
 	}, nil
 }
+
+// ReadFile reads a file from the sandbox.
+func (m *MockProvider) ReadFile(_ context.Context, sandboxID string, path string) ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.sandboxes[sandboxID]; !ok {
+		return nil, ErrSandboxNotFound
+	}
+
+	// Mock implementation
+	return []byte("Mock file content from: " + path), nil
+}
+
+// WriteFile writes content to a file in the sandbox.
+func (m *MockProvider) WriteFile(_ context.Context, sandboxID string, path string, content []byte) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.sandboxes[sandboxID]; !ok {
+		return ErrSandboxNotFound
+	}
+
+	// Mock implementation - always succeeds
+	return nil
+}
+
+// ListDir lists the contents of a directory in the sandbox.
+func (m *MockProvider) ListDir(_ context.Context, sandboxID string, path string) ([]*FileInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.sandboxes[sandboxID]; !ok {
+		return nil, ErrSandboxNotFound
+	}
+
+	// Mock implementation
+	return []*FileInfo{
+		{Name: "file1.txt", Path: path + "/file1.txt", IsDir: false, Size: 100},
+		{Name: "subdir", Path: path + "/subdir", IsDir: true, Size: 0},
+	}, nil
+}

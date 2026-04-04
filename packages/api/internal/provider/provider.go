@@ -17,6 +17,7 @@ type (
 	ListResult      = provider.ListResult
 	CommandConfig   = provider.CommandConfig
 	CommandResult   = provider.CommandResult
+	FileInfo        = provider.FileInfo
 	SandboxProvider = provider.SandboxProvider
 )
 

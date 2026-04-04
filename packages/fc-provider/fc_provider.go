@@ -519,6 +519,111 @@ func (p *FCProvider) RunCommand(ctx context.Context, sandboxID string, config *p
 	}, nil
 }
 
+// ReadFile reads a file from the sandbox via cat command.
+func (p *FCProvider) ReadFile(ctx context.Context, sandboxID string, path string) ([]byte, error) {
+	// Use cat command to read file content
+	result, err := p.RunCommand(ctx, sandboxID, &provider.CommandConfig{
+		Command: "cat",
+		Args:    []string{path},
+		Timeout: 30 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if result.ExitCode != 0 {
+		return nil, fmt.Errorf("failed to read file: %s", result.Stderr)
+	}
+
+	return []byte(result.Stdout), nil
+}
+
+// WriteFile writes content to a file in the sandbox via tee command.
+func (p *FCProvider) WriteFile(ctx context.Context, sandboxID string, path string, content []byte) error {
+	// Use tee to write file content
+	// Escape special characters for shell safety
+	escapedContent := strings.ReplaceAll(string(content), "'", "'\"'\"'")
+
+	result, err := p.RunCommand(ctx, sandboxID, &provider.CommandConfig{
+		Command: "bash",
+		Args:    []string{"-c", fmt.Sprintf("echo '%s' > %s", escapedContent, path)},
+		Timeout: 30 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+
+	if result.ExitCode != 0 {
+		return fmt.Errorf("failed to write file: %s", result.Stderr)
+	}
+
+	return nil
+}
+
+// ListDir lists the contents of a directory in the sandbox.
+func (p *FCProvider) ListDir(ctx context.Context, sandboxID string, path string) ([]*provider.FileInfo, error) {
+	// Use ls -la to list directory contents
+	result, err := p.RunCommand(ctx, sandboxID, &provider.CommandConfig{
+		Command: "ls",
+		Args:    []string{"-la", path},
+		Timeout: 30 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if result.ExitCode != 0 {
+		return nil, fmt.Errorf("failed to list directory: %s", result.Stderr)
+	}
+
+	// Parse ls -la output
+	files := parseLsOutput(result.Stdout)
+	return files, nil
+}
+
+// parseLsOutput parses the output of ls -la into FileInfo structs.
+func parseLsOutput(output string) []*provider.FileInfo {
+	var files []*provider.FileInfo
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		// Skip header line and empty lines
+		if strings.HasPrefix(line, "total") || strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		// Parse ls -la format: drwxr-xr-x 2 user group size month day time name
+		parts := strings.Fields(line)
+		if len(parts) < 8 {
+			continue
+		}
+
+		modeStr := parts[0]
+		isDir := modeStr[0] == 'd'
+
+		name := strings.Join(parts[7:], " ")
+		// Handle symlinks
+		if strings.Contains(name, " -> ") {
+			name = strings.Split(name, " -> ")[0]
+		}
+
+		size := int64(0)
+		if !isDir && len(parts) >= 5 {
+			fmt.Sscanf(parts[4], "%d", &size)
+		}
+
+		files = append(files, &provider.FileInfo{
+			Path:   name,
+			Name:   name,
+			IsDir:  isDir,
+			Size:   size,
+			Mode:   0, // Would need stat command for full mode
+		})
+	}
+
+	return files
+}
+
 // Helper functions
 
 func generateSessionID() string {
