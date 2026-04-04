@@ -3,7 +3,7 @@ name: test-sandbox-app
 access: "default"
 
 vars:
-  region: "cn-hangzhou"
+  region: "cn-shanghai"
 
 resources:
   test_sandbox:

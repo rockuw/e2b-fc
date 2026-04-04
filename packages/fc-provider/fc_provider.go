@@ -10,10 +10,10 @@ import (
 	"time"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
-	fc20230330 "github.com/alibabacloud-go/fc-20230330-3/client"
+	fc20230330 "github.com/alibabacloud-go/fc-20230330-3/v3/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 
-	"github.com/e2b-dev/infra/packages/api/internal/provider"
+	"github.com/e2b-dev/infra/packages/shared/pkg/provider"
 )
 
 // Config contains the configuration for FC provider.

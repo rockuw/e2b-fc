@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/e2b-dev/infra/packages/api/internal/provider"
+	"github.com/e2b-dev/infra/packages/shared/pkg/provider"
 )
 
 // TestFCProvider_New tests creating FC provider from env
