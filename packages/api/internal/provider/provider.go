@@ -15,6 +15,8 @@ type (
 	ConnectionInfo  = provider.ConnectionInfo
 	ListFilter      = provider.ListFilter
 	ListResult      = provider.ListResult
+	CommandConfig   = provider.CommandConfig
+	CommandResult   = provider.CommandResult
 	SandboxProvider = provider.SandboxProvider
 )
 

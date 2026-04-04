@@ -103,6 +103,36 @@ type ListResult struct {
 	NextToken string
 }
 
+// CommandResult contains the result of a command execution.
+type CommandResult struct {
+	// ExitCode is the exit code of the process
+	ExitCode int32
+
+	// Stdout is the standard output of the process
+	Stdout string
+
+	// Stderr is the standard error of the process
+	Stderr string
+}
+
+// CommandConfig contains the configuration for running a command.
+type CommandConfig struct {
+	// Command is the command to execute
+	Command string
+
+	// Args are the command arguments
+	Args []string
+
+	// EnvVars are environment variables for the command
+	EnvVars map[string]string
+
+	// Cwd is the working directory
+	Cwd string
+
+	// Timeout is the command timeout
+	Timeout time.Duration
+}
+
 // SandboxProvider is the interface for sandbox backend providers.
 // It abstracts the underlying infrastructure (Firecracker, FC Session, etc.)
 type SandboxProvider interface {
@@ -124,4 +154,8 @@ type SandboxProvider interface {
 	// Connect returns connection information for accessing a sandbox's envd.
 	// Returns ErrSandboxNotFound if the sandbox doesn't exist.
 	Connect(ctx context.Context, sandboxID string) (*ConnectionInfo, error)
+
+	// RunCommand executes a command in the sandbox and returns the result.
+	// Returns ErrSandboxNotFound if the sandbox doesn't exist.
+	RunCommand(ctx context.Context, sandboxID string, config *CommandConfig) (*CommandResult, error)
 }

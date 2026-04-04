@@ -288,3 +288,84 @@ func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID str
 
 	c.Status(http.StatusNoContent)
 }
+
+// CommandRequest represents a request to run a command in a sandbox.
+type CommandRequest struct {
+	// Cmd is the command to execute
+	Cmd string `json:"cmd" binding:"required"`
+	// Args are the command arguments
+	Args []string `json:"args"`
+	// EnvVars are environment variables for the command
+	EnvVars map[string]string `json:"env_vars"`
+	// Cwd is the working directory
+	Cwd string `json:"cwd"`
+	// Timeout is the command timeout in seconds
+	Timeout int32 `json:"timeout"`
+}
+
+// CommandResponse represents the response from running a command.
+type CommandResponse struct {
+	ExitCode int32  `json:"exit_code"`
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+}
+
+// PostSandboxesSandboxIDCommands runs a command in a sandbox.
+// POST /sandboxes/{sandboxID}/commands
+func (h *SandboxHandlers) PostSandboxesSandboxIDCommands(c *gin.Context, sandboxID string) {
+	ctx := c.Request.Context()
+
+	// Parse request
+	var req CommandRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, api.Error{
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Invalid request: %s", err),
+		})
+
+		return
+	}
+
+	// Build command config
+	timeout := time.Duration(req.Timeout) * time.Second
+	if timeout == 0 {
+		timeout = 60 * time.Second // Default 60 seconds
+	}
+
+	config := &provider.CommandConfig{
+		Command: req.Cmd,
+		Args:    req.Args,
+		EnvVars: req.EnvVars,
+		Cwd:     req.Cwd,
+		Timeout: timeout,
+	}
+
+	// Run command
+	result, err := h.provider.RunCommand(ctx, sandboxID, config)
+	if err != nil {
+		if errors.Is(err, provider.ErrSandboxNotFound) {
+			c.JSON(http.StatusNotFound, api.Error{
+				Code:    http.StatusNotFound,
+				Message: "Sandbox not found",
+			})
+
+			return
+		}
+		telemetry.ReportError(ctx, "failed to run command", err)
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to run command: %s", err),
+		})
+
+		return
+	}
+
+	// Return result
+	response := CommandResponse{
+		ExitCode: result.ExitCode,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+	}
+
+	c.JSON(http.StatusOK, response)
+}

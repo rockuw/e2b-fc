@@ -2,11 +2,16 @@
 package fcprovider
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -397,6 +402,120 @@ func (p *FCProvider) Connect(ctx context.Context, sandboxID string) (*provider.C
 		Endpoint:    endpoint,
 		AccessToken: accessToken,
 		SessionID:   sandboxID,
+	}, nil
+}
+
+// RunCommand executes a command in the sandbox via envd's Process service.
+// For sync execution, it waits for the process to complete and returns stdout/stderr.
+func (p *FCProvider) RunCommand(ctx context.Context, sandboxID string, config *provider.CommandConfig) (*provider.CommandResult, error) {
+	// Get connection info
+	connInfo, err := p.Connect(ctx, sandboxID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build the Process.Start URL
+	// Envd Connect RPC endpoint format: /connect.v1.ProcessService/Start
+	startURL := strings.TrimSuffix(connInfo.Endpoint, "/") + "/connect.v1.ProcessService/Start"
+
+	// Build the request body matching Connect RPC format
+	envs := make(map[string]string)
+	for k, v := range config.EnvVars {
+		envs[k] = v
+	}
+
+	cwd := config.Cwd
+	if cwd == "" {
+		cwd = "/workspace"
+	}
+
+	// Build process config
+	processConfig := map[string]interface{}{
+		"cmd": config.Command,
+		"args": func() []string {
+			if config.Args != nil {
+				return config.Args
+			}
+			return []string{}
+		}(),
+		"envs": envs,
+		"cwd":  cwd,
+	}
+
+	startRequest := map[string]interface{}{
+		"process": processConfig,
+	}
+
+	requestBody, err := json.Marshal(startRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", startURL, bytes.NewReader(requestBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers for FC session affinity and Connect RPC
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Session-Id", connInfo.SessionID)
+	req.Header.Set("Connect-Accept-Content-Type", "application/json")
+	req.Header.Set("Connect-Protocol", "json")
+
+	// Execute request
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Parse Connect RPC response (newline-delimited JSON)
+	var stdout, stderr bytes.Buffer
+	exitCode := int32(0)
+
+	lines := bytes.Split(body, []byte("\n"))
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+
+		var event map[string]interface{}
+		if err := json.Unmarshal(line, &event); err != nil {
+			continue
+		}
+
+		// Look for data events
+		if dataEvent, ok := event["data"].(map[string]interface{}); ok {
+			if stdoutData, ok := dataEvent["stdout"].(string); ok {
+				stdout.WriteString(stdoutData)
+			}
+			if stderrData, ok := dataEvent["stderr"].(string); ok {
+				stderr.WriteString(stderrData)
+			}
+		}
+
+		// Look for end events
+		if endEvent, ok := event["end"].(map[string]interface{}); ok {
+			if exitCodeFloat, ok := endEvent["exit_code"].(float64); ok {
+				exitCode = int32(exitCodeFloat)
+			}
+		}
+	}
+
+	return &provider.CommandResult{
+		ExitCode: exitCode,
+		Stdout:   stdout.String(),
+		Stderr:   stderr.String(),
 	}, nil
 }
 

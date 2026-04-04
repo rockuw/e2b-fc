@@ -28,6 +28,9 @@ type MockProvider struct {
 
 	// ConnectError can be set to return an error on Connect
 	ConnectError error
+
+	// RunCommandError can be set to return an error on RunCommand
+	RunCommandError error
 }
 
 // NewMockProvider creates a new mock provider.
@@ -170,4 +173,26 @@ func (m *MockProvider) Reset() {
 	m.DeleteError = nil
 	m.ListError = nil
 	m.ConnectError = nil
+	m.RunCommandError = nil
+}
+
+// RunCommand executes a command in the sandbox.
+func (m *MockProvider) RunCommand(_ context.Context, sandboxID string, config *CommandConfig) (*CommandResult, error) {
+	if m.RunCommandError != nil {
+		return nil, m.RunCommandError
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.sandboxes[sandboxID]; !ok {
+		return nil, ErrSandboxNotFound
+	}
+
+	// Mock implementation - return a simple success result
+	return &CommandResult{
+		ExitCode: 0,
+		Stdout:   "Mock command executed: " + config.Command,
+		Stderr:   "",
+	}, nil
 }

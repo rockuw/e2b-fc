@@ -304,6 +304,9 @@ func runFCMode(
 		sandboxes.DELETE("/:sandboxID", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
 			sandboxHandlers.DeleteSandboxesSandboxID(c, c.Param("sandboxID"))
 		})
+		sandboxes.POST("/:sandboxID/commands", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.PostSandboxesSandboxIDCommands(c, c.Param("sandboxID"))
+		})
 	}
 
 	// V2 endpoints for e2b SDK compatibility
