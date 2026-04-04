@@ -1,3 +1,4 @@
+//nolint:revive // package-naming: internal tool package
 package populate_redis
 
 import (
