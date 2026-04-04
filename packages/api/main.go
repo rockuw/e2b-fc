@@ -298,10 +298,10 @@ func runFCMode(
 	{
 		sandboxes.POST("", sandboxHandlers.PostSandboxes)
 		sandboxes.GET("", sandboxHandlers.GetSandboxes)
-		sandboxes.GET("/:sandboxID", func(c *gin.Context) {
+		sandboxes.GET("/:sandboxID", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
 			sandboxHandlers.GetSandboxesSandboxID(c, c.Param("sandboxID"))
 		})
-		sandboxes.DELETE("/:sandboxID", func(c *gin.Context) {
+		sandboxes.DELETE("/:sandboxID", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
 			sandboxHandlers.DeleteSandboxesSandboxID(c, c.Param("sandboxID"))
 		})
 	}
@@ -330,7 +330,7 @@ func runFCMode(
 	go func() {
 		<-sigChan
 		l.Info(ctx, "Shutting down FC API server...")
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 30*time.Second)
 		defer shutdownCancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			l.Error(ctx, "Server shutdown error", zap.Error(err))

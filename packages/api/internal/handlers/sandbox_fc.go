@@ -203,8 +203,10 @@ func (h *SandboxHandlers) GetSandboxes(c *gin.Context) {
 // GetSandboxesSandboxID gets a sandbox by ID.
 // GET /sandboxes/{sandboxID}
 func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string) {
+	ctx := c.Request.Context()
+
 	// Get sandbox via provider
-	info, err := h.provider.Get(c.Request.Context(), sandboxID)
+	info, err := h.provider.Get(ctx, sandboxID)
 	if err != nil {
 		if errors.Is(err, provider.ErrSandboxNotFound) {
 			c.JSON(http.StatusNotFound, api.Error{
@@ -214,7 +216,7 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 
 			return
 		}
-		telemetry.ReportError(c.Request.Context(), "failed to get sandbox", err)
+		telemetry.ReportError(ctx, "failed to get sandbox", err)
 		c.JSON(http.StatusInternalServerError, api.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to get sandbox: %s", err),
@@ -224,7 +226,7 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 	}
 
 	// Get connection info
-	connInfo, err := h.provider.Connect(c.Request.Context(), info.SandboxID)
+	connInfo, err := h.provider.Connect(ctx, info.SandboxID)
 	if err != nil {
 		connInfo = &provider.ConnectionInfo{}
 	}
@@ -260,8 +262,10 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 // DeleteSandboxesSandboxID deletes a sandbox.
 // DELETE /sandboxes/{sandboxID}
 func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID string) {
+	ctx := c.Request.Context()
+
 	// Delete sandbox via provider
-	err := h.provider.Delete(c.Request.Context(), sandboxID)
+	err := h.provider.Delete(ctx, sandboxID)
 	if err != nil {
 		if errors.Is(err, provider.ErrSandboxNotFound) {
 			c.JSON(http.StatusNotFound, api.Error{
@@ -271,7 +275,7 @@ func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID str
 
 			return
 		}
-		telemetry.ReportError(c.Request.Context(), "failed to delete sandbox", err)
+		telemetry.ReportError(ctx, "failed to delete sandbox", err)
 		c.JSON(http.StatusInternalServerError, api.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to delete sandbox: %s", err),
@@ -280,7 +284,7 @@ func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID str
 		return
 	}
 
-	telemetry.ReportEvent(c.Request.Context(), "Deleted sandbox")
+	telemetry.ReportEvent(ctx, "Deleted sandbox")
 
 	c.Status(http.StatusNoContent)
 }
