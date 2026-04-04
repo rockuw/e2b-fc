@@ -38,8 +38,8 @@ type Config struct {
 	NomadToken   string `env:"NOMAD_TOKEN"`
 
 	PostgresConnectionString string `env:"POSTGRES_CONNECTION_STRING"`
-	DBMaxOpenConnections     int32  `env:"DB_MAX_OPEN_CONNECTIONS"                       envDefault:"40"`
-	DBMinIdleConnections     int32  `env:"DB_MIN_IDLE_CONNECTIONS"                       envDefault:"5"`
+	DBMaxOpenConnections     int32  `env:"DB_MAX_OPEN_CONNECTIONS"    envDefault:"40"
+	DBMinIdleConnections     int32  `env:"DB_MIN_IDLE_CONNECTIONS"    envDefault:"5"
 
 	AuthDBConnectionString            string `env:"AUTH_DB_CONNECTION_STRING"`
 	AuthDBReadReplicaConnectionString string `env:"AUTH_DB_READ_REPLICA_CONNECTION_STRING"`
@@ -82,7 +82,7 @@ type Config struct {
 	FCAccessKeyID     string `env:"FC_ACCESS_KEY_ID"`
 	FCAccessKeySecret string `env:"FC_ACCESS_KEY_SECRET"`
 	FCAccountID       string `env:"FC_ACCOUNT_ID"`
-	FCRegion          string `env:"FC_REGION"                           envDefault:"cn-shanghai"`
+	FCRegion          string `env:"FC_REGION"            envDefault:"cn-shanghai"`
 }
 
 type JWTSigningKey any
