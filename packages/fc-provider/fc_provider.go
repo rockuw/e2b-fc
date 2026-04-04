@@ -47,7 +47,7 @@ func ConfigFromEnv() *Config {
 		AccountID:          os.Getenv("FC_ACCOUNT_ID"),
 		Region:             getEnvOrDefault("FC_REGION", "cn-shanghai"),
 		DefaultTTL:         3600, // 1 hour
-		DefaultIdleTimeout: 300,  // 5 minutes (FC max is 300)
+		DefaultIdleTimeout: 60,   // FC Session requires exactly 60 seconds for sessionIdleTimeoutInSeconds
 	}
 }
 
@@ -62,6 +62,7 @@ func getEnvOrDefault(key, defaultVal string) string {
 type sessionMeta struct {
 	functionName string
 	createdAt    time.Time
+	ttl          int64 // TTL in seconds
 }
 
 // FCProvider implements SandboxProvider using Aliyun FC Session API.
@@ -104,10 +105,14 @@ func (p *FCProvider) Create(ctx context.Context, config *provider.SandboxConfig)
 	// Generate a unique session ID (this becomes the sandbox ID)
 	sessionID := generateSessionID()
 
-	// Calculate timeout
+	// Calculate timeout - FC requires minimum 60 seconds
 	timeout := p.config.DefaultTTL
 	if config.Timeout > 0 {
 		timeout = int64(config.Timeout.Seconds())
+	}
+	// Enforce FC minimum TTL of 60 seconds
+	if timeout < 60 {
+		timeout = 60
 	}
 
 	// Create session request
@@ -135,6 +140,7 @@ func (p *FCProvider) Create(ctx context.Context, config *provider.SandboxConfig)
 	p.sessions.Store(sessionID, &sessionMeta{
 		functionName: functionName,
 		createdAt:    time.Now(),
+		ttl:          timeout,
 	})
 
 	now := time.Now()
@@ -162,6 +168,15 @@ func (p *FCProvider) Get(ctx context.Context, sandboxID string) (*provider.Sandb
 	sessionMeta := meta.(*sessionMeta)
 	functionName := sessionMeta.functionName
 
+	// Check if the session has expired based on local TTL tracking
+	// FC doesn't automatically expire sessions, so we track TTL locally
+	expiresAt := sessionMeta.createdAt.Add(time.Duration(sessionMeta.ttl) * time.Second)
+	if time.Now().After(expiresAt) {
+		// Session has expired locally, remove from tracking
+		p.sessions.Delete(sandboxID)
+		return nil, provider.ErrSandboxNotFound
+	}
+
 	request := &fc20230330.GetSessionRequest{}
 	runtime := &dara.RuntimeOptions{}
 	headers := make(map[string]*string)
@@ -173,17 +188,17 @@ func (p *FCProvider) Get(ctx context.Context, sandboxID string) (*provider.Sandb
 	}
 
 	// Map FC session status to sandbox state
+	// FC uses "Active" and "Expired" as status values
 	state := provider.SandboxStateRunning
 	if response.Body != nil && response.Body.SessionStatus != nil {
 		switch *response.Body.SessionStatus {
-		case "Running":
+		case "Active":
 			state = provider.SandboxStateRunning
-		case "Idle":
-			state = provider.SandboxStateIdle
 		case "Expired":
 			state = provider.SandboxStateExpired
-		case "Deleted":
-			state = provider.SandboxStateDeleted
+		default:
+			// Treat unknown status as running
+			state = provider.SandboxStateRunning
 		}
 	}
 
@@ -228,7 +243,9 @@ func (p *FCProvider) Delete(ctx context.Context, sandboxID string) error {
 
 // List returns a paginated list of sandboxes.
 // Note: FC Session API requires functionName to list sessions.
-// This implementation lists sessions for all tracked functions.
+// This implementation lists sessions for all tracked functions,
+// and also includes locally tracked sessions that may not yet appear in FC API.
+// Expired and deleted sessions are filtered out.
 func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*provider.ListResult, error) {
 	result := &provider.ListResult{
 		Sandboxes: make([]*provider.SandboxInfo, 0),
@@ -236,16 +253,26 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 
 	// Collect unique function names from tracked sessions
 	functionNames := make(map[string]bool)
+	// Also track sessions we've created locally (may not appear in FC API immediately)
+	localSessions := make(map[string]*sessionMeta)
 	p.sessions.Range(func(key, value interface{}) bool {
+		sessionID := key.(string)
 		meta := value.(*sessionMeta)
 		functionNames[meta.functionName] = true
+		localSessions[sessionID] = meta
 		return true
 	})
 
 	runtime := &dara.RuntimeOptions{}
 	headers := make(map[string]*string)
 
-	// List sessions for each function
+	// Track which session IDs we've already added from FC API
+	addedSessionIDs := make(map[string]bool)
+
+	// Get current time for TTL checks
+	now := time.Now()
+
+	// List sessions for each function from FC API
 	for functionName := range functionNames {
 		request := &fc20230330.ListSessionsRequest{}
 
@@ -264,17 +291,37 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 
 		if response.Body != nil && response.Body.Sessions != nil {
 			for _, session := range response.Body.Sessions {
+				sessionID := getValue(session.SessionId)
+				addedSessionIDs[sessionID] = true
+
+				// Map FC session status to sandbox state
+				// FC uses "Active" and "Expired" as status values
 				state := provider.SandboxStateRunning
 				if session.SessionStatus != nil {
 					switch *session.SessionStatus {
-					case "Running":
+					case "Active":
 						state = provider.SandboxStateRunning
-					case "Idle":
-						state = provider.SandboxStateIdle
 					case "Expired":
 						state = provider.SandboxStateExpired
-					case "Deleted":
-						state = provider.SandboxStateDeleted
+					default:
+						state = provider.SandboxStateRunning
+					}
+				}
+
+				// Skip expired sessions from FC
+				if state == provider.SandboxStateExpired {
+					// Remove from local tracking if present
+					p.sessions.Delete(sessionID)
+					continue
+				}
+
+				// Check local TTL tracking for this session
+				if localMeta, ok := localSessions[sessionID]; ok {
+					expiresAt := localMeta.createdAt.Add(time.Duration(localMeta.ttl) * time.Second)
+					if now.After(expiresAt) {
+						// Session has expired locally, remove from tracking
+						p.sessions.Delete(sessionID)
+						continue
 					}
 				}
 
@@ -284,7 +331,7 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 				}
 
 				result.Sandboxes = append(result.Sandboxes, &provider.SandboxInfo{
-					SandboxID:  getValue(session.SessionId),
+					SandboxID:  sessionID,
 					TemplateID: functionName,
 					State:      state,
 					CreatedAt:  createdAt,
@@ -294,6 +341,26 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 
 		if response.Body != nil && response.Body.NextToken != nil {
 			result.NextToken = *response.Body.NextToken
+		}
+	}
+
+	// Add locally tracked sessions that weren't returned by FC API (e.g., newly created)
+	// Also check if they should have expired based on TTL
+	for sessionID, meta := range localSessions {
+		if !addedSessionIDs[sessionID] {
+			// Check if this session should still be active based on TTL
+			expiresAt := meta.createdAt.Add(time.Duration(meta.ttl) * time.Second)
+			if now.After(expiresAt) {
+				// Session has expired, remove from tracking
+				p.sessions.Delete(sessionID)
+				continue
+			}
+			result.Sandboxes = append(result.Sandboxes, &provider.SandboxInfo{
+				SandboxID:  sessionID,
+				TemplateID: meta.functionName,
+				State:      provider.SandboxStateRunning,
+				CreatedAt:  meta.createdAt,
+			})
 		}
 	}
 

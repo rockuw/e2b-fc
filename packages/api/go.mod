@@ -7,6 +7,7 @@ replace (
 	github.com/e2b-dev/infra/packages/auth v0.0.0 => ../auth
 	github.com/e2b-dev/infra/packages/clickhouse v0.0.0 => ../clickhouse
 	github.com/e2b-dev/infra/packages/db v0.0.0 => ../db
+	github.com/e2b-dev/infra/packages/fc-provider v0.0.0 => ../fc-provider
 	github.com/e2b-dev/infra/packages/shared v0.0.0 => ../shared
 )
 
@@ -22,6 +23,7 @@ require (
 	github.com/e2b-dev/infra/packages/auth v0.0.0
 	github.com/e2b-dev/infra/packages/clickhouse v0.0.0
 	github.com/e2b-dev/infra/packages/db v0.0.0
+	github.com/e2b-dev/infra/packages/fc-provider v0.0.0
 	github.com/e2b-dev/infra/packages/shared v0.0.0
 	github.com/flowchartsman/retry v1.2.0
 	github.com/getkin/kin-openapi v0.133.0
@@ -80,6 +82,13 @@ require (
 	github.com/Workiva/go-datastructures v1.1.6 // indirect
 	github.com/air-verse/air v1.61.7 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
+	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.5 // indirect
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.14 // indirect
+	github.com/alibabacloud-go/debug v1.0.1 // indirect
+	github.com/alibabacloud-go/fc-20230330/v4 v4.7.1 // indirect
+	github.com/alibabacloud-go/tea v1.3.13 // indirect
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.7 // indirect
+	github.com/aliyun/credentials-go v1.4.5 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
@@ -110,6 +119,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/clbanning/mxj/v2 v2.7.0 // indirect
 	github.com/cli/safeexec v1.0.1 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
@@ -324,6 +334,7 @@ require (
 	github.com/tdewolff/parse/v2 v2.7.15 // indirect
 	github.com/testcontainers/testcontainers-go v0.40.0 // indirect
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.39.0 // indirect
+	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/tjhop/slog-gokit v0.1.4 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
@@ -390,6 +401,7 @@ require (
 	google.golang.org/api v0.257.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409 // indirect
+	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apimachinery v0.34.3 // indirect

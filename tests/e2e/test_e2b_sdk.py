@@ -12,12 +12,16 @@ import os
 import time
 import pytest
 
+# Configure E2B SDK to use custom API URL before importing
+E2BFC_BASE_URL = os.environ.get("E2BFC_BASE_URL", "http://localhost:8081")
+os.environ["E2B_API_URL"] = E2BFC_BASE_URL
+
 # Use vanilla e2b SDK
 from e2b import Sandbox
 
 
-# Configure test base URL
-E2BFC_BASE_URL = os.environ.get("E2BFC_BASE_URL", "http://localhost:8080")
+# Template to use for tests (maps to FC function name)
+TEST_TEMPLATE = os.environ.get("E2B_TEST_TEMPLATE", "test-sandbox")
 
 
 @pytest.fixture(scope="module")
@@ -25,7 +29,8 @@ def api_key():
     """Get API key from environment."""
     key = os.environ.get("E2B_API_KEY")
     if not key:
-        pytest.skip("E2B_API_KEY not set")
+        # Use a dummy key for local testing
+        key = "test-api-key"
     return key
 
 
@@ -33,7 +38,7 @@ def api_key():
 def sandbox_client(api_key):
     """Create sandbox client configured for E2B-FC."""
     # Configure the client to use our E2B-FC endpoint
-    # The e2b SDK uses E2B_API_KEY for authentication
+    # The e2b SDK uses E2B_API_URL from environment
     yield Sandbox
 
 
@@ -49,7 +54,7 @@ class TestSandboxCRUD:
         - Returns a valid sandbox ID
         """
         sandbox = sandbox_client.create(
-            template="code-interpreter-v1",
+            template=TEST_TEMPLATE,
             timeout=300  # 5 minutes
         )
 
@@ -69,17 +74,19 @@ class TestSandboxCRUD:
         - Returns list with pagination support
         """
         # Create a sandbox first
-        sandbox = sandbox_client.create(template="code-interpreter-v1")
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE)
 
         try:
-            # List sandboxes
-            sandboxes = sandbox_client.list()
+            # List sandboxes - returns a paginator
+            paginator = sandbox_client.list()
 
-            assert sandboxes is not None
-            assert isinstance(sandboxes, list)
+            # Get items from paginator
+            sandbox_list = paginator.next_items()
+
+            assert sandbox_list is not None
 
             # Our sandbox should be in the list
-            sandbox_ids = [s.sandbox_id for s in sandboxes]
+            sandbox_ids = [s.sandbox_id for s in sandbox_list]
             assert sandbox.sandbox_id in sandbox_ids
         finally:
             sandbox.kill()
@@ -92,7 +99,7 @@ class TestSandboxCRUD:
         - Can get sandbox info by ID
         - Returns correct state
         """
-        sandbox = sandbox_client.create(template="code-interpreter-v1")
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE)
 
         try:
             # Get sandbox info
@@ -100,7 +107,8 @@ class TestSandboxCRUD:
 
             assert info is not None
             assert info.sandbox_id == sandbox.sandbox_id
-            assert info.status in ["running", "idle"]
+            # state is a SandboxState enum
+            assert info.state.value in ["running", "paused"]
         finally:
             sandbox.kill()
 
@@ -112,7 +120,7 @@ class TestSandboxCRUD:
         - Can kill a sandbox
         - Sandbox is removed
         """
-        sandbox = sandbox_client.create(template="code-interpreter-v1")
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE)
         sandbox_id = sandbox.sandbox_id
 
         # Kill the sandbox
@@ -120,8 +128,9 @@ class TestSandboxCRUD:
 
         # Verify it's deleted
         time.sleep(1)  # Wait for deletion to propagate
-        sandboxes = sandbox_client.list()
-        sandbox_ids = [s.sandbox_id for s in sandboxes]
+        paginator = sandbox_client.list()
+        sandbox_list = paginator.next_items()
+        sandbox_ids = [s.sandbox_id for s in sandbox_list]
 
         assert sandbox_id not in sandbox_ids
 
@@ -134,21 +143,23 @@ class TestSandboxCRUD:
         - No longer accessible after expiration
 
         Note: This test is slow as it waits for expiration.
+        FC requires minimum TTL of 60 seconds, so we use 60 seconds.
         """
-        # Create sandbox with very short timeout (10 seconds)
+        # Create sandbox with minimum TTL (60 seconds for FC)
         sandbox = sandbox_client.create(
-            template="code-interpreter-v1",
-            timeout=10
+            template=TEST_TEMPLATE,
+            timeout=60  # FC minimum is 60 seconds
         )
 
         sandbox_id = sandbox.sandbox_id
 
         # Wait for expiration (with buffer)
-        time.sleep(15)
+        time.sleep(70)
 
         # Sandbox should be expired
-        sandboxes = sandbox_client.list()
-        sandbox_ids = [s.sandbox_id for s in sandboxes]
+        paginator = sandbox_client.list()
+        sandbox_list = paginator.next_items()
+        sandbox_ids = [s.sandbox_id for s in sandbox_list]
 
         assert sandbox_id not in sandbox_ids
 

@@ -87,15 +87,69 @@ func (h *SandboxHandlers) PostSandboxes(c *gin.Context) {
 	}
 
 	// Convert to API response
+	envdVersion := api.EnvdVersion("1.0.0")
 	response := api.Sandbox{
-		SandboxID:          info.SandboxID,
-		TemplateID:         info.TemplateID,
-		ClientID:           info.SandboxID, // Use sandbox ID as client ID for FC
-		EnvdAccessToken:    &connInfo.AccessToken,
-		TrafficAccessToken: &connInfo.AccessToken,
+		SandboxID:           info.SandboxID,
+		TemplateID:          info.TemplateID,
+		ClientID:            info.SandboxID, // Use sandbox ID as client ID for FC
+		EnvdVersion:         envdVersion,
+		EnvdAccessToken:     &connInfo.AccessToken,
+		TrafficAccessToken:  &connInfo.AccessToken,
 	}
 
 	c.JSON(http.StatusCreated, response)
+}
+
+// GetV2Sandboxes lists sandboxes for v2 API (e2b SDK).
+// GET /v2/sandboxes
+func (h *SandboxHandlers) GetV2Sandboxes(c *gin.Context) {
+	// Build filter
+	filter := &provider.ListFilter{
+		Limit:     100,
+		NextToken: "",
+	}
+
+	// List sandboxes via provider
+	result, err := h.provider.List(c.Request.Context(), filter)
+	if err != nil {
+		telemetry.ReportError(c.Request.Context(), "failed to list sandboxes", err)
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to list sandboxes: %s", err),
+		})
+
+		return
+	}
+
+	// Convert to API response with full details
+	sandboxes := make([]api.ListedSandbox, 0, len(result.Sandboxes))
+	for _, info := range result.Sandboxes {
+		sandbox := api.ListedSandbox{
+			SandboxID:   info.SandboxID,
+			TemplateID:  info.TemplateID,
+			ClientID:    info.SandboxID,
+			CpuCount:    1,
+			DiskSizeMB:  512,
+			MemoryMB:    512,
+			EnvdVersion: "1.0.0",
+			StartedAt:   info.CreatedAt,
+			EndAt:       info.ExpiresAt,
+		}
+		// Map state
+		switch info.State {
+		case provider.SandboxStateRunning:
+			sandbox.State = "running"
+		case provider.SandboxStateIdle:
+			sandbox.State = "idle"
+		case provider.SandboxStateExpired:
+			sandbox.State = "expired"
+		default:
+			sandbox.State = "running"
+		}
+		sandboxes = append(sandboxes, sandbox)
+	}
+
+	c.JSON(http.StatusOK, sandboxes)
 }
 
 // GetSandboxes lists sandboxes.
@@ -175,13 +229,29 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 		connInfo = &provider.ConnectionInfo{}
 	}
 
-	// Convert to API response
-	response := api.Sandbox{
-		SandboxID:          info.SandboxID,
-		TemplateID:         info.TemplateID,
-		ClientID:           info.SandboxID,
-		EnvdAccessToken:    &connInfo.AccessToken,
-		TrafficAccessToken: &connInfo.AccessToken,
+	// Convert to API response with full details
+	state := "running"
+	switch info.State {
+	case provider.SandboxStateRunning:
+		state = "running"
+	case provider.SandboxStateIdle:
+		state = "idle"
+	case provider.SandboxStateExpired:
+		state = "expired"
+	}
+
+	response := api.SandboxDetail{
+		SandboxID:       info.SandboxID,
+		TemplateID:       info.TemplateID,
+		ClientID:        info.SandboxID,
+		CpuCount:        1,
+		DiskSizeMB:       512,
+		MemoryMB:         512,
+		EnvdVersion:     "1.0.0",
+		EnvdAccessToken: &connInfo.AccessToken,
+		StartedAt:       info.CreatedAt,
+		EndAt:           info.ExpiresAt,
+		State:           api.SandboxState(state),
 	}
 
 	c.JSON(http.StatusOK, response)
