@@ -9,13 +9,13 @@ import (
 
 // Re-export types and interfaces
 type (
-	SandboxConfig    = provider.SandboxConfig
-	SandboxInfo      = provider.SandboxInfo
-	SandboxState     = provider.SandboxState
-	ConnectionInfo   = provider.ConnectionInfo
-	ListFilter       = provider.ListFilter
-	ListResult       = provider.ListResult
-	SandboxProvider  = provider.SandboxProvider
+	SandboxConfig   = provider.SandboxConfig
+	SandboxInfo     = provider.SandboxInfo
+	SandboxState    = provider.SandboxState
+	ConnectionInfo  = provider.ConnectionInfo
+	ListFilter      = provider.ListFilter
+	ListResult      = provider.ListResult
+	SandboxProvider = provider.SandboxProvider
 )
 
 // Re-export errors
