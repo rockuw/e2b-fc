@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -429,7 +430,7 @@ func (p *FCProvider) RunCommand(ctx context.Context, sandboxID string, config *p
 		cwd = "/workspace"
 	}
 
-	// Build process config
+	// Build process config - using the proper Connect RPC format
 	processConfig := map[string]interface{}{
 		"cmd": config.Command,
 		"args": func() []string {
@@ -451,8 +452,16 @@ func (p *FCProvider) RunCommand(ctx context.Context, sandboxID string, config *p
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Create context with timeout if specified
+	reqCtx := ctx
+	if config.Timeout > 0 {
+		var cancel context.CancelFunc
+		reqCtx, cancel = context.WithTimeout(ctx, config.Timeout)
+		defer cancel()
+	}
+
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", startURL, bytes.NewReader(requestBody))
+	req, err := http.NewRequestWithContext(reqCtx, "POST", startURL, bytes.NewReader(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -463,13 +472,21 @@ func (p *FCProvider) RunCommand(ctx context.Context, sandboxID string, config *p
 	req.Header.Set("Connect-Accept-Content-Type", "application/json")
 	req.Header.Set("Connect-Protocol", "json")
 
-	// Execute request
+	// Execute request - timeout is handled by context
 	client := &http.Client{
-		Timeout: 60 * time.Second,
+		Timeout: 0, // Let context handle timeout
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
+		// Check if this was a timeout
+		if reqCtx.Err() == context.DeadlineExceeded {
+			return &provider.CommandResult{
+				ExitCode: 124, // Standard timeout exit code
+				Stdout:   "",
+				Stderr:   fmt.Sprintf("command timed out after %v", config.Timeout),
+			}, nil
+		}
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -538,15 +555,16 @@ func (p *FCProvider) ReadFile(ctx context.Context, sandboxID string, path string
 	return []byte(result.Stdout), nil
 }
 
-// WriteFile writes content to a file in the sandbox via tee command.
+// WriteFile writes content to a file in the sandbox using base64 encoding.
+// This approach handles binary content and special characters correctly.
 func (p *FCProvider) WriteFile(ctx context.Context, sandboxID string, path string, content []byte) error {
-	// Use tee to write file content
-	// Escape special characters for shell safety
-	escapedContent := strings.ReplaceAll(string(content), "'", "'\"'\"'")
+	// Use base64 encoding to safely transfer content
+	// This avoids issues with shell escaping and special characters
+	encoded := base64.StdEncoding.EncodeToString(content)
 
 	result, err := p.RunCommand(ctx, sandboxID, &provider.CommandConfig{
 		Command: "bash",
-		Args:    []string{"-c", fmt.Sprintf("echo '%s' > %s", escapedContent, path)},
+		Args:    []string{"-c", fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, path)},
 		Timeout: 30 * time.Second,
 	})
 	if err != nil {
@@ -613,11 +631,11 @@ func parseLsOutput(output string) []*provider.FileInfo {
 		}
 
 		files = append(files, &provider.FileInfo{
-			Path:   name,
-			Name:   name,
-			IsDir:  isDir,
-			Size:   size,
-			Mode:   0, // Would need stat command for full mode
+			Path:  name,
+			Name:  name,
+			IsDir: isDir,
+			Size:  size,
+			Mode:  0, // Would need stat command for full mode
 		})
 	}
 
