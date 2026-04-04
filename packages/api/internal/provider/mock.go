@@ -211,7 +211,7 @@ func (m *MockProvider) ReadFile(_ context.Context, sandboxID string, path string
 }
 
 // WriteFile writes content to a file in the sandbox.
-func (m *MockProvider) WriteFile(_ context.Context, sandboxID string, _ string, content []byte) error {
+func (m *MockProvider) WriteFile(_ context.Context, sandboxID string, _ string, _ []byte) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

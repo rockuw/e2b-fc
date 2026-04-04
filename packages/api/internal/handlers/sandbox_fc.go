@@ -398,6 +398,7 @@ func (h *SandboxHandlers) GetSandboxesSandboxIDFiles(c *gin.Context, sandboxID s
 			Code:    http.StatusBadRequest,
 			Message: "path query parameter is required",
 		})
+
 		return
 	}
 
