@@ -89,12 +89,12 @@ func (h *SandboxHandlers) PostSandboxes(c *gin.Context) {
 	// Convert to API response
 	envdVersion := api.EnvdVersion("1.0.0")
 	response := api.Sandbox{
-		SandboxID:           info.SandboxID,
-		TemplateID:          info.TemplateID,
-		ClientID:            info.SandboxID, // Use sandbox ID as client ID for FC
-		EnvdVersion:         envdVersion,
-		EnvdAccessToken:     &connInfo.AccessToken,
-		TrafficAccessToken:  &connInfo.AccessToken,
+		SandboxID:          info.SandboxID,
+		TemplateID:         info.TemplateID,
+		ClientID:           info.SandboxID, // Use sandbox ID as client ID for FC
+		EnvdVersion:        envdVersion,
+		EnvdAccessToken:    &connInfo.AccessToken,
+		TrafficAccessToken: &connInfo.AccessToken,
 	}
 
 	c.JSON(http.StatusCreated, response)
@@ -242,11 +242,11 @@ func (h *SandboxHandlers) GetSandboxesSandboxID(c *gin.Context, sandboxID string
 
 	response := api.SandboxDetail{
 		SandboxID:       info.SandboxID,
-		TemplateID:       info.TemplateID,
+		TemplateID:      info.TemplateID,
 		ClientID:        info.SandboxID,
 		CpuCount:        1,
-		DiskSizeMB:       512,
-		MemoryMB:         512,
+		DiskSizeMB:      512,
+		MemoryMB:        512,
 		EnvdVersion:     "1.0.0",
 		EnvdAccessToken: &connInfo.AccessToken,
 		StartedAt:       info.CreatedAt,

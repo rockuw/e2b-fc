@@ -237,7 +237,6 @@ func NewGinServer(ctx context.Context, config cfg.Config, tel *telemetry.Client,
 // This is a simplified mode that doesn't require Postgres, Redis, Nomad, or Auth.
 func runFCMode(
 	ctx context.Context,
-	cancel context.CancelFunc,
 	config cfg.Config,
 	l logger.Logger,
 	port int,
@@ -264,6 +263,7 @@ func runFCMode(
 	fcProv, err := fcprovider.New(fcConfig)
 	if err != nil {
 		l.Fatal(ctx, "Failed to create FC provider", zap.Error(err))
+
 		return 1
 	}
 
@@ -340,6 +340,7 @@ func runFCMode(
 	l.Info(ctx, "FC API server starting", zap.Int("port", port))
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		l.Fatal(ctx, "Server error", zap.Error(err))
+
 		return 1
 	}
 
@@ -435,7 +436,7 @@ func run() int {
 
 	// FC mode: skip Postgres/Redis/Nomad initialization
 	if config.FCEnabled {
-		return runFCMode(ctx, cancel, config, l, port, commitSHA, serviceInstanceID, debug)
+		return runFCMode(ctx, config, l, port, commitSHA, serviceInstanceID, debug)
 	}
 
 	err = sqlcdb.CheckMigrationVersion(ctx, config.PostgresConnectionString, expectedMigration)
@@ -670,8 +671,7 @@ func main() {
 
 	// In FC mode, use simplified startup
 	if config.FCEnabled {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := context.Background()
 
 		// Create a minimal logger for FC mode
 		l := sharedutils.Must(logger.NewLogger(logger.LoggerConfig{
@@ -680,8 +680,6 @@ func main() {
 			IsDebug:       env.IsDebug(),
 			EnableConsole: true,
 		}))
-		defer l.Sync()
-		logger.ReplaceGlobals(ctx, l)
 
 		// Get port from PORT env var or default
 		port := defaultPort
@@ -691,7 +689,10 @@ func main() {
 			}
 		}
 
-		os.Exit(runFCMode(ctx, cancel, config, l, port, "", "", ""))
+		ret := runFCMode(ctx, config, l, port, "", "", "")
+		_ = l.Sync()
+
+		os.Exit(ret)
 	}
 
 	os.Exit(run())
