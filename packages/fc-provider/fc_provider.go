@@ -55,6 +55,7 @@ func getEnvOrDefault(key, defaultVal string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
 	}
+
 	return defaultVal
 }
 
@@ -174,6 +175,7 @@ func (p *FCProvider) Get(ctx context.Context, sandboxID string) (*provider.Sandb
 	if time.Now().After(expiresAt) {
 		// Session has expired locally, remove from tracking
 		p.sessions.Delete(sandboxID)
+
 		return nil, provider.ErrSandboxNotFound
 	}
 
@@ -260,6 +262,7 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 		meta := value.(*sessionMeta)
 		functionNames[meta.functionName] = true
 		localSessions[sessionID] = meta
+
 		return true
 	})
 
@@ -312,6 +315,7 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 				if state == provider.SandboxStateExpired {
 					// Remove from local tracking if present
 					p.sessions.Delete(sessionID)
+
 					continue
 				}
 
@@ -321,6 +325,7 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 					if now.After(expiresAt) {
 						// Session has expired locally, remove from tracking
 						p.sessions.Delete(sessionID)
+
 						continue
 					}
 				}
@@ -353,8 +358,10 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 			if now.After(expiresAt) {
 				// Session has expired, remove from tracking
 				p.sessions.Delete(sessionID)
+
 				continue
 			}
+
 			result.Sandboxes = append(result.Sandboxes, &provider.SandboxInfo{
 				SandboxID:  sessionID,
 				TemplateID: meta.functionName,
