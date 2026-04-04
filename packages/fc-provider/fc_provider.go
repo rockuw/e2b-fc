@@ -10,8 +10,9 @@ import (
 	"time"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
-	fc20230330 "github.com/alibabacloud-go/fc-20230330-3/v3/client"
+	fc20230330 "github.com/alibabacloud-go/fc-20230330/v4/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
+	"github.com/alibabacloud-go/tea/tea"
 
 	"github.com/e2b-dev/infra/packages/shared/pkg/provider"
 )
@@ -27,7 +28,7 @@ type Config struct {
 	// AccountID is the Aliyun account ID
 	AccountID string
 
-	// Region is the FC region (e.g., "cn-hangzhou")
+	// Region is the FC region (e.g., "cn-shanghai")
 	Region string
 
 	// DefaultTTL is the default session TTL in seconds
@@ -43,7 +44,7 @@ func ConfigFromEnv() *Config {
 		AccessKeyID:        os.Getenv("FC_ACCESS_KEY_ID"),
 		AccessKeySecret:    os.Getenv("FC_ACCESS_KEY_SECRET"),
 		AccountID:          os.Getenv("FC_ACCOUNT_ID"),
-		Region:             getEnvOrDefault("FC_REGION", "cn-hangzhou"),
+		Region:             getEnvOrDefault("FC_REGION", "cn-shanghai"),
 		DefaultTTL:         3600,  // 1 hour
 		DefaultIdleTimeout: 1800,  // 30 minutes
 	}
@@ -58,9 +59,9 @@ func getEnvOrDefault(key, defaultVal string) string {
 
 // FCProvider implements SandboxProvider using Aliyun FC Session API.
 type FCProvider struct {
-	client    *fc20230330.Client
-	config    *Config
-	endpoint  string
+	client   *fc20230330.Client
+	config   *Config
+	endpoint string
 }
 
 // New creates a new FC provider.
@@ -105,21 +106,19 @@ func (p *FCProvider) Create(ctx context.Context, config *provider.SandboxConfig)
 	// The function name is the template ID
 	functionName := config.TemplateID
 
+	// Build the request body
 	request := &fc20230330.CreateSessionRequest{
-		FunctionName: &functionName,
-		SessionId:    &sessionID,
-		SessionTTL:   &timeout,
-		// Set idle timeout (default 30 minutes)
-		SessionIdleTimeout: teaInt64(p.config.DefaultIdleTimeout),
-		// Use isolation mode for complete sandbox isolation
-		SessionMode: tea.String("isolation"),
-		// Use HeaderField affinity with x-session-id
-		SessionAffinity: tea.String("HeaderField"),
+		Body: &fc20230330.CreateSessionInput{
+			SessionId:                  tea.String(sessionID),
+			SessionTTLInSeconds:        tea.Int64(timeout),
+			SessionIdleTimeoutInSeconds: tea.Int64(p.config.DefaultIdleTimeout),
+		},
 	}
 
 	// Create the session
 	runtime := &util.RuntimeOptions{}
-	response, err := p.client.CreateSessionWithOptions(request, runtime)
+	headers := make(map[string]*string)
+	response, err := p.client.CreateSessionWithOptions(tea.String(functionName), request, headers, runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
@@ -144,8 +143,9 @@ func (p *FCProvider) Create(ctx context.Context, config *provider.SandboxConfig)
 func (p *FCProvider) Get(ctx context.Context, sandboxID string) (*provider.SandboxInfo, error) {
 	request := &fc20230330.GetSessionRequest{}
 	runtime := &util.RuntimeOptions{}
+	headers := make(map[string]*string)
 
-	response, err := p.client.GetSessionWithOptions(tea.String(sandboxID), request, runtime)
+	response, err := p.client.GetSessionWithOptions(tea.String(sandboxID), request, headers, runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
@@ -188,8 +188,9 @@ func (p *FCProvider) Get(ctx context.Context, sandboxID string) (*provider.Sandb
 func (p *FCProvider) Delete(ctx context.Context, sandboxID string) error {
 	request := &fc20230330.DeleteSessionRequest{}
 	runtime := &util.RuntimeOptions{}
+	headers := make(map[string]*string)
 
-	_, err := p.client.DeleteSessionWithOptions(tea.String(sandboxID), request, runtime)
+	_, err := p.client.DeleteSessionWithOptions(tea.String(sandboxID), request, headers, runtime)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
@@ -202,15 +203,21 @@ func (p *FCProvider) List(ctx context.Context, filter *provider.ListFilter) (*pr
 	request := &fc20230330.ListSessionsRequest{}
 
 	if filter != nil && filter.Limit > 0 {
-		request.Limit = tea.Int32(filter.Limit)
+		request.Body = &fc20230330.ListSessionsInput{
+			Limit: tea.Int32(filter.Limit),
+		}
 	}
 
 	if filter != nil && filter.NextToken != "" {
-		request.NextToken = tea.String(filter.NextToken)
+		if request.Body == nil {
+			request.Body = &fc20230330.ListSessionsInput{}
+		}
+		request.Body.NextToken = tea.String(filter.NextToken)
 	}
 
 	runtime := &util.RuntimeOptions{}
-	response, err := p.client.ListSessionsWithOptions(request, runtime)
+	headers := make(map[string]*string)
+	response, err := p.client.ListSessionsWithOptions(request, headers, runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -276,9 +283,9 @@ func (p *FCProvider) Connect(ctx context.Context, sandboxID string) (*provider.C
 	accessToken := fmt.Sprintf("fc-session-%s", sandboxID)
 
 	return &provider.ConnectionInfo{
-		Endpoint:     endpoint,
-		AccessToken:  accessToken,
-		SessionID:    sandboxID,
+		Endpoint:    endpoint,
+		AccessToken: accessToken,
+		SessionID:   sandboxID,
 	}, nil
 }
 
@@ -295,14 +302,4 @@ func getValue(s *string) string {
 		return ""
 	}
 	return *s
-}
-
-// tea.String is a helper from Aliyun SDK
-func tea.String(s string) *string {
-	return &s
-}
-
-// tea.Int64 is a helper from Aliyun SDK
-func teaInt64(n int64) *int64 {
-	return &n
 }
