@@ -41,6 +41,49 @@ jobs:
           FC_ACCOUNT_ID: ${{ secrets.FC_ACCOUNT_ID }}
           FC_REGION: ${{ vars.FC_REGION || 'cn-hangzhou' }}
 
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: |
+          pip install -r tests/e2e/requirements.txt
+
+      - name: Run E2E tests
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          E2BFC_BASE_URL: ${{ vars.E2BFC_BASE_URL || 'http://localhost:8080' }}
+        run: |
+          # Start FC API server in background (requires FC secrets)
+          if [ -n "${{ secrets.FC_ACCESS_KEY_ID }}" ]; then
+            FC_ENABLED=true FC_ACCESS_KEY_ID=${{ secrets.FC_ACCESS_KEY_ID }} FC_ACCESS_KEY_SECRET=${{ secrets.FC_ACCESS_KEY_SECRET }} FC_ACCOUNT_ID=${{ secrets.FC_ACCOUNT_ID }} FC_REGION=${{ vars.FC_REGION || 'cn-shanghai' }} PORT=8080 go run ./packages/api &
+            API_PID=$!
+            sleep 5
+          fi
+          # Run E2E tests
+          E2B_API_URL=http://localhost:8080 pytest tests/e2e/test_e2b_sdk.py -v --tb=short
+          TEST_RESULT=$?
+          # Cleanup
+          if [ -n "$API_PID" ]; then
+            kill $API_PID 2>/dev/null || true
+          fi
+          exit $TEST_RESULT
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
