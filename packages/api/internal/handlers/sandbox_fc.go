@@ -292,7 +292,7 @@ func (h *SandboxHandlers) DeleteSandboxesSandboxID(c *gin.Context, sandboxID str
 // CommandRequest represents a request to run a command in a sandbox.
 type CommandRequest struct {
 	// Cmd is the command to execute
-	Cmd string `json:"cmd" binding:"required"`
+	Cmd string `binding:"required" json:"cmd"`
 	// Args are the command arguments
 	Args []string `json:"args"`
 	// EnvVars are environment variables for the command
@@ -373,7 +373,7 @@ func (h *SandboxHandlers) PostSandboxesSandboxIDCommands(c *gin.Context, sandbox
 // FileRequest represents a request to read/write a file.
 type FileRequest struct {
 	// Path is the file path
-	Path string `json:"path" binding:"required"`
+	Path string `binding:"required" json:"path"`
 	// Content is the file content (for write)
 	Content string `json:"content"`
 }
@@ -409,12 +409,15 @@ func (h *SandboxHandlers) GetSandboxesSandboxIDFiles(c *gin.Context, sandboxID s
 				Code:    http.StatusNotFound,
 				Message: "Sandbox not found",
 			})
+
 			return
 		}
+
 		c.JSON(http.StatusInternalServerError, api.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to read file: %s", err),
 		})
+
 		return
 	}
 
@@ -438,6 +441,7 @@ func (h *SandboxHandlers) PostSandboxesSandboxIDFiles(c *gin.Context, sandboxID 
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid request: %s", err),
 		})
+
 		return
 	}
 
@@ -449,12 +453,15 @@ func (h *SandboxHandlers) PostSandboxesSandboxIDFiles(c *gin.Context, sandboxID 
 				Code:    http.StatusNotFound,
 				Message: "Sandbox not found",
 			})
+
 			return
 		}
+
 		c.JSON(http.StatusInternalServerError, api.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to write file: %s", err),
 		})
+
 		return
 	}
 
@@ -483,12 +490,15 @@ func (h *SandboxHandlers) GetSandboxesSandboxIDDir(c *gin.Context, sandboxID str
 				Code:    http.StatusNotFound,
 				Message: "Sandbox not found",
 			})
+
 			return
 		}
+
 		c.JSON(http.StatusInternalServerError, api.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to list directory: %s", err),
 		})
+
 		return
 	}
 
