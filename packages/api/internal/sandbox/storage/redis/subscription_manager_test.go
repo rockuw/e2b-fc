@@ -230,8 +230,8 @@ func TestSubscriptionManager_PubSubEndToEnd(t *testing.T) {
 	ch, cleanup := storage.subManager.subscribe(routingKey)
 	t.Cleanup(cleanup)
 
-	// Allow time for the PubSub subscription to be established
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the PubSub subscription to be established
+	require.NoError(t, storage.subManager.waitReady(t.Context()))
 
 	// Publish via Redis (simulating what the callback does)
 	err := client.Publish(t.Context(), globalTransitionNotifyChannel, routingKey).Err()
@@ -256,7 +256,8 @@ func TestSubscriptionManager_PubSubIgnoresUnrelatedKeys(t *testing.T) {
 	ch, cleanup := storage.subManager.subscribe("my:sandbox:key")
 	t.Cleanup(cleanup)
 
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the PubSub subscription to be established
+	require.NoError(t, storage.subManager.waitReady(t.Context()))
 
 	// Publish a message with a different routing key
 	err := client.Publish(t.Context(), globalTransitionNotifyChannel, "other:sandbox:key").Err()
