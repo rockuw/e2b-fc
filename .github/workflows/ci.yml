@@ -39,7 +39,7 @@ jobs:
           FC_ACCESS_KEY_ID: ${{ secrets.FC_ACCESS_KEY_ID }}
           FC_ACCESS_KEY_SECRET: ${{ secrets.FC_ACCESS_KEY_SECRET }}
           FC_ACCOUNT_ID: ${{ secrets.FC_ACCOUNT_ID }}
-          FC_REGION: ${{ vars.FC_REGION || 'cn-shanghai' }}
+          FC_REGION: cn-shanghai
 
   integration-tests:
     name: Integration Tests
@@ -71,7 +71,7 @@ jobs:
         run: |
           # Start FC API server in background (requires FC secrets)
           if [ -n "${{ secrets.FC_ACCESS_KEY_ID }}" ]; then
-            FC_ENABLED=true FC_ACCESS_KEY_ID=${{ secrets.FC_ACCESS_KEY_ID }} FC_ACCESS_KEY_SECRET=${{ secrets.FC_ACCESS_KEY_SECRET }} FC_ACCOUNT_ID=${{ secrets.FC_ACCOUNT_ID }} FC_REGION=${{ vars.FC_REGION || 'cn-shanghai' }} PORT=8080 go run ./packages/api &
+            FC_ENABLED=true FC_ACCESS_KEY_ID=${{ secrets.FC_ACCESS_KEY_ID }} FC_ACCESS_KEY_SECRET=${{ secrets.FC_ACCESS_KEY_SECRET }} FC_ACCOUNT_ID=${{ secrets.FC_ACCOUNT_ID }} FC_REGION=cn-shanghai PORT=8080 go run ./packages/api &
             API_PID=$!
             sleep 5
           fi
