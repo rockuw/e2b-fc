@@ -69,15 +69,45 @@ jobs:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
           E2BFC_BASE_URL: ${{ vars.E2BFC_BASE_URL || 'http://localhost:8080' }}
         run: |
+          # Pre-download Go dependencies
+          cd packages/api && go mod download && cd ../..
+
           # Start FC API server in background (requires FC secrets)
           if [ -n "${{ secrets.FC_ACCESS_KEY_ID }}" ]; then
-            FC_ENABLED=true FC_ACCESS_KEY_ID=${{ secrets.FC_ACCESS_KEY_ID }} FC_ACCESS_KEY_SECRET=${{ secrets.FC_ACCESS_KEY_SECRET }} FC_ACCOUNT_ID=${{ secrets.FC_ACCOUNT_ID }} FC_REGION=cn-shanghai PORT=8080 go run ./packages/api &
+            FC_ENABLED=true FC_ACCESS_KEY_ID=${{ secrets.FC_ACCESS_KEY_ID }} FC_ACCESS_KEY_SECRET=${{ secrets.FC_ACCESS_KEY_SECRET }} FC_ACCOUNT_ID=${{ secrets.FC_ACCOUNT_ID }} FC_REGION=cn-shanghai PORT=8080 nohup go run ./packages/api > /tmp/api.log 2>&1 &
             API_PID=$!
-            sleep 5
+            echo "Started API server with PID: $API_PID"
+
+            # Wait for server to start (up to 30 seconds)
+            echo "Waiting for API server to start..."
+            for i in {1..30}; do
+              if curl -s http://localhost:8080/health > /dev/null 2>&1; then
+                echo "API server is ready!"
+                break
+              fi
+              sleep 1
+            done
+
+            # Show server logs if it didn't start
+            if ! curl -s http://localhost:8080/health > /dev/null 2>&1; then
+              echo "API server failed to start. Logs:"
+              cat /tmp/api.log
+              echo "Killing PID: $API_PID"
+              kill $API_PID 2>/dev/null || true
+              exit 1
+            fi
           fi
+
           # Run E2E tests
           E2B_API_URL=http://localhost:8080 pytest tests/e2e/test_e2b_sdk.py -v --tb=short
           TEST_RESULT=$?
+
+          # Show server logs on test failure
+          if [ $TEST_RESULT -ne 0 ]; then
+            echo "Test failed. API server logs:"
+            cat /tmp/api.log
+          fi
+
           # Cleanup
           if [ -n "$API_PID" ]; then
             kill $API_PID 2>/dev/null || true
