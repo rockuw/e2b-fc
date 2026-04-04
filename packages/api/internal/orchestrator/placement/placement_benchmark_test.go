@@ -55,8 +55,8 @@ type SimulatedNode struct {
 
 	mu                 sync.RWMutex
 	sandboxes          map[string]*LiveSandbox
-	totalPlacements    int64
-	rejectedPlacements int64
+	totalPlacements    atomic.Int64
+	rejectedPlacements atomic.Int64
 	lastUpdateTime     time.Time
 }
 
@@ -119,7 +119,7 @@ func (n *SimulatedNode) placeSandbox(sbx *LiveSandbox) bool {
 	metrics := n.Metrics()
 	// Check capacity with overcommit
 	if metrics.CpuAllocated+uint32(sbx.RequestedCPU) > metrics.CpuCount*4 { // 4x overcommit
-		atomic.AddInt64(&n.rejectedPlacements, 1)
+		n.rejectedPlacements.Add(1)
 
 		return false
 	}
@@ -137,7 +137,7 @@ func (n *SimulatedNode) placeSandbox(sbx *LiveSandbox) bool {
 		MetricMemoryAllocatedBytes: metrics.MemoryAllocatedBytes + uint64(sbx.RequestedMemory)*1024*1024,
 	})
 	n.sandboxes[sbx.ID] = sbx
-	atomic.AddInt64(&n.totalPlacements, 1)
+	n.totalPlacements.Add(1)
 
 	return true
 }
