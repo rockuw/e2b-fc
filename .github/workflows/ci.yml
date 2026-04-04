@@ -39,7 +39,7 @@ jobs:
           FC_ACCESS_KEY_ID: ${{ secrets.FC_ACCESS_KEY_ID }}
           FC_ACCESS_KEY_SECRET: ${{ secrets.FC_ACCESS_KEY_SECRET }}
           FC_ACCOUNT_ID: ${{ secrets.FC_ACCOUNT_ID }}
-          FC_REGION: ${{ vars.FC_REGION || 'cn-hangzhou' }}
+          FC_REGION: ${{ vars.FC_REGION || 'cn-shanghai' }}
 
   integration-tests:
     name: Integration Tests
