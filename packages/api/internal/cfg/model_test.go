@@ -19,18 +19,20 @@ func TestParse(t *testing.T) {
 	t.Setenv("VOLUME_TOKEN_SIGNING_KEY", fmt.Sprintf("HMAC:%s", base64.StdEncoding.EncodeToString([]byte("secret"))))
 	t.Setenv("VOLUME_TOKEN_SIGNING_KEY_NAME", "my-key-name")
 
-	t.Run("postgres connection string is required", func(t *testing.T) { //nolint:paralleltest // cannot call t.Setenv and t.Parallel
+	t.Run("postgres connection string is required when FC_ENABLED=false", func(t *testing.T) { //nolint:paralleltest // cannot call t.Setenv and t.Parallel
 		removeEnv(t, "POSTGRES_CONNECTION_STRING")
+		t.Setenv("FC_ENABLED", "false")
 
 		_, err := Parse()
-		assert.ErrorContains(t, err, `required environment variable "POSTGRES_CONNECTION_STRING" is not set`)
+		assert.ErrorContains(t, err, `POSTGRES_CONNECTION_STRING is required when FC_ENABLED=false`)
 	})
 
-	t.Run("postgres connection string cannot be empty", func(t *testing.T) {
+	t.Run("postgres connection string cannot be empty when FC_ENABLED=false", func(t *testing.T) {
 		t.Setenv("POSTGRES_CONNECTION_STRING", "")
+		t.Setenv("FC_ENABLED", "false")
 
 		_, err := Parse()
-		assert.ErrorContains(t, err, `environment variable "POSTGRES_CONNECTION_STRING" should not be empty`)
+		assert.ErrorContains(t, err, `POSTGRES_CONNECTION_STRING is required when FC_ENABLED=false`)
 	})
 
 	t.Run("supabase secrets are comma separated", func(t *testing.T) {

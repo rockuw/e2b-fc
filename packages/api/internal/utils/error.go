@@ -1,3 +1,4 @@
+//nolint:revive // package-naming: utility package
 package utils
 
 import (

@@ -37,6 +37,7 @@ import (
 	"github.com/e2b-dev/infra/packages/api/internal/utils"
 	"github.com/e2b-dev/infra/packages/auth/pkg/auth"
 	sqlcdb "github.com/e2b-dev/infra/packages/db/client"
+	fcprovider "github.com/e2b-dev/infra/packages/fc-provider"
 	"github.com/e2b-dev/infra/packages/shared/pkg/env"
 	"github.com/e2b-dev/infra/packages/shared/pkg/factories"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
@@ -232,6 +233,120 @@ func NewGinServer(ctx context.Context, config cfg.Config, tel *telemetry.Client,
 	return s
 }
 
+// runFCMode runs the API server in FC (FunctionCompute) mode.
+// This is a simplified mode that doesn't require Postgres, Redis, Nomad, or Auth.
+func runFCMode(
+	ctx context.Context,
+	config cfg.Config,
+	l logger.Logger,
+	port int,
+	commitSHA string,
+	serviceInstanceID string,
+	debug string,
+) int {
+	l.Info(ctx, "Starting API service in FC mode...", zap.String("commit_sha", commitSHA), logger.WithServiceInstanceID(serviceInstanceID))
+
+	if debug != "true" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// Create FC provider
+	fcConfig := &fcprovider.Config{
+		AccessKeyID:        config.FCAccessKeyID,
+		AccessKeySecret:    config.FCAccessKeySecret,
+		AccountID:          config.FCAccountID,
+		Region:             config.FCRegion,
+		DefaultTTL:         3600, // 1 hour
+		DefaultIdleTimeout: 60,   // FC Session requires exactly 60 seconds
+	}
+
+	fcProv, err := fcprovider.New(fcConfig)
+	if err != nil {
+		l.Fatal(ctx, "Failed to create FC provider", zap.Error(err))
+
+		return 1
+	}
+
+	l.Info(ctx, "Created FC provider", zap.String("account_id", config.FCAccountID), zap.String("region", config.FCRegion))
+
+	// Create FC handlers
+	sandboxHandlers := handlers.NewSandboxHandlers(fcProv)
+
+	// Create Gin router
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	// CORS configuration
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true
+	corsConfig.AllowHeaders = []string{
+		"Origin", "Content-Length", "Content-Type",
+		"Authorization", "X-API-Key",
+		"browser", "lang", "lang_version", "machine",
+		"os", "package_version", "processor", "publisher",
+		"release", "sdk_runtime", "system",
+	}
+	r.Use(cors.New(corsConfig))
+
+	// Health endpoint
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+	})
+
+	// Sandbox endpoints
+	sandboxes := r.Group("/sandboxes")
+	{
+		sandboxes.POST("", sandboxHandlers.PostSandboxes)
+		sandboxes.GET("", sandboxHandlers.GetSandboxes)
+		sandboxes.GET("/:sandboxID", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.GetSandboxesSandboxID(c, c.Param("sandboxID"))
+		})
+		sandboxes.DELETE("/:sandboxID", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.DeleteSandboxesSandboxID(c, c.Param("sandboxID"))
+		})
+	}
+
+	// V2 endpoints for e2b SDK compatibility
+	v2 := r.Group("/v2")
+	{
+		v2.GET("/sandboxes", sandboxHandlers.GetV2Sandboxes)
+	}
+
+	// Create HTTP server
+	srv := &http.Server{
+		Addr:              fmt.Sprintf("0.0.0.0:%d", port),
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      70 * time.Second,
+		IdleTimeout:       620 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
+	}
+
+	// Signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		<-sigChan
+		l.Info(ctx, "Shutting down FC API server...")
+		shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 30*time.Second)
+		defer shutdownCancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			l.Error(ctx, "Server shutdown error", zap.Error(err))
+		}
+	}()
+
+	l.Info(ctx, "FC API server starting", zap.Int("port", port))
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		l.Fatal(ctx, "Server error", zap.Error(err))
+
+		return 1
+	}
+
+	return 0
+}
+
 func run() int {
 	ctx, cancel := context.WithCancel(context.Background()) // root context
 	defer cancel()
@@ -317,6 +432,11 @@ func run() int {
 	config, err := cfg.Parse()
 	if err != nil {
 		logger.L().Fatal(ctx, "Error parsing config", zap.Error(err))
+	}
+
+	// FC mode: skip Postgres/Redis/Nomad initialization
+	if config.FCEnabled {
+		return runFCMode(ctx, config, l, port, commitSHA, serviceInstanceID, debug)
 	}
 
 	err = sqlcdb.CheckMigrationVersion(ctx, config.PostgresConnectionString, expectedMigration)
@@ -542,5 +662,38 @@ func run() int {
 }
 
 func main() {
+	// Check if FC mode is enabled - parse config early to skip full setup
+	config, err := cfg.Parse()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// In FC mode, use simplified startup
+	if config.FCEnabled {
+		ctx := context.Background()
+
+		// Create a minimal logger for FC mode
+		l := sharedutils.Must(logger.NewLogger(logger.LoggerConfig{
+			ServiceName:   serviceName,
+			IsInternal:    true,
+			IsDebug:       env.IsDebug(),
+			EnableConsole: true,
+		}))
+
+		// Get port from PORT env var or default
+		port := defaultPort
+		if p := os.Getenv("PORT"); p != "" {
+			if portInt, err := strconv.Atoi(p); err == nil {
+				port = portInt
+			}
+		}
+
+		ret := runFCMode(ctx, config, l, port, "", "", "")
+		_ = l.Sync()
+
+		os.Exit(ret)
+	}
+
 	os.Exit(run())
 }

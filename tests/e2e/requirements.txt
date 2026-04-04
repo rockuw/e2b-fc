@@ -1,0 +1,5 @@
+# E2E Test Dependencies
+e2b>=1.0.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+requests>=2.28.0

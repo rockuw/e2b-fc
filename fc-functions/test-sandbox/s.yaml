@@ -1,0 +1,34 @@
+edition: 3.0.0
+name: test-sandbox-app
+access: "default"
+
+vars:
+  region: "cn-shanghai"
+
+resources:
+  test_sandbox:
+    component: fc3
+    props:
+      region: ${vars.region}
+      functionName: "test-sandbox"
+      description: "Test function for FC Session sandbox"
+      runtime: "python3.9"
+      code: ./
+      role: 'acs:ram::1237050315505682:role/admin-to-fc'
+      handler: index.handler
+      memorySize: 512
+      timeout: 300
+      instanceConcurrency: 10
+      # Enable session affinity for session mode
+      sessionAffinity: HEADER_FIELD
+      triggers:
+        - triggerName: httpTrigger
+          triggerType: http
+          description: "HTTP trigger for test-sandbox"
+          qualifier: LATEST
+          triggerConfig:
+            authType: anonymous
+            disableURLInternet: false
+            methods:
+              - GET
+              - POST

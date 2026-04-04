@@ -31,15 +31,15 @@ type Config struct {
 	ClickhouseConnectionString string `env:"CLICKHOUSE_CONNECTION_STRING"`
 
 	LokiPassword string `env:"LOKI_PASSWORD"`
-	LokiURL      string `env:"LOKI_URL,required"`
+	LokiURL      string `env:"LOKI_URL"`
 	LokiUser     string `env:"LOKI_USER"`
 
 	NomadAddress string `env:"NOMAD_ADDRESS" envDefault:"http://localhost:4646"`
 	NomadToken   string `env:"NOMAD_TOKEN"`
 
-	PostgresConnectionString string `env:"POSTGRES_CONNECTION_STRING,required,notEmpty"`
-	DBMaxOpenConnections     int32  `env:"DB_MAX_OPEN_CONNECTIONS"                      envDefault:"40"`
-	DBMinIdleConnections     int32  `env:"DB_MIN_IDLE_CONNECTIONS"                      envDefault:"5"`
+	PostgresConnectionString string `env:"POSTGRES_CONNECTION_STRING"`
+	DBMaxOpenConnections     int32  `env:"DB_MAX_OPEN_CONNECTIONS"    envDefault:"40"`
+	DBMinIdleConnections     int32  `env:"DB_MIN_IDLE_CONNECTIONS"    envDefault:"5"`
 
 	AuthDBConnectionString            string `env:"AUTH_DB_CONNECTION_STRING"`
 	AuthDBReadReplicaConnectionString string `env:"AUTH_DB_READ_REPLICA_CONNECTION_STRING"`
@@ -73,16 +73,26 @@ type Config struct {
 	SandboxStorageBackend string `env:"SANDBOX_STORAGE_BACKEND" envDefault:"memory"`
 
 	DomainName string `env:"DOMAIN_NAME" envDefault:""`
+
+	// FCEnabled switches the API server to use Aliyun FunctionCompute Session backend
+	// instead of Nomad. When enabled, Postgres/Redis/Nomad are not required.
+	FCEnabled bool `env:"FC_ENABLED" envDefault:"false"`
+
+	// FC-specific configuration (only required when FC_ENABLED=true)
+	FCAccessKeyID     string `env:"FC_ACCESS_KEY_ID"`
+	FCAccessKeySecret string `env:"FC_ACCESS_KEY_SECRET"`
+	FCAccountID       string `env:"FC_ACCOUNT_ID"`
+	FCRegion          string `env:"FC_REGION"            envDefault:"cn-shanghai"`
 }
 
 type JWTSigningKey any
 
 type VolumesTokenConfig struct {
-	Issuer         string            `env:"VOLUME_TOKEN_ISSUER,required"`
-	SigningMethod  jwt.SigningMethod `env:"VOLUME_TOKEN_SIGNING_METHOD,required"`
-	SigningKey     JWTSigningKey     `env:"VOLUME_TOKEN_SIGNING_KEY,required"`
-	SigningKeyName string            `env:"VOLUME_TOKEN_SIGNING_KEY_NAME,required"`
-	Duration       time.Duration     `env:"VOLUME_TOKEN_DURATION"                  envDefault:"1h"`
+	Issuer         string            `env:"VOLUME_TOKEN_ISSUER"`
+	SigningMethod  jwt.SigningMethod `env:"VOLUME_TOKEN_SIGNING_METHOD"`
+	SigningKey     JWTSigningKey     `env:"VOLUME_TOKEN_SIGNING_KEY"`
+	SigningKeyName string            `env:"VOLUME_TOKEN_SIGNING_KEY_NAME"`
+	Duration       time.Duration     `env:"VOLUME_TOKEN_DURATION"         envDefault:"1h"`
 }
 
 var (
@@ -138,12 +148,35 @@ func Parse() (Config, error) {
 		config.DefaultKernelVersion = featureflags.DefaultKernelVersion
 	}
 
-	if config.AuthDBConnectionString == "" {
+	// In FC mode, AuthDB defaults to PostgresConnectionString which may be empty
+	// Skip this defaulting in FC mode
+	if !config.FCEnabled && config.AuthDBConnectionString == "" {
 		config.AuthDBConnectionString = config.PostgresConnectionString
 	}
 
 	if !slices.Contains([]string{SandboxStorageBackendMemory, SandboxStorageBackendRedis}, config.SandboxStorageBackend) {
 		return config, fmt.Errorf("invalid sandbox storage backend: %s", config.SandboxStorageBackend)
+	}
+
+	// Validate FC config when FC_ENABLED
+	if config.FCEnabled {
+		if config.FCAccessKeyID == "" {
+			return Config{}, fmt.Errorf("FC_ACCESS_KEY_ID is required when FC_ENABLED=true")
+		}
+		if config.FCAccessKeySecret == "" {
+			return Config{}, fmt.Errorf("FC_ACCESS_KEY_SECRET is required when FC_ENABLED=true")
+		}
+		if config.FCAccountID == "" {
+			return Config{}, fmt.Errorf("FC_ACCOUNT_ID is required when FC_ENABLED=true")
+		}
+	} else {
+		// In non-FC mode, PostgresConnectionString and LokiURL are required
+		if config.PostgresConnectionString == "" {
+			return Config{}, fmt.Errorf("POSTGRES_CONNECTION_STRING is required when FC_ENABLED=false")
+		}
+		if config.LokiURL == "" {
+			return Config{}, fmt.Errorf("LOKI_URL is required when FC_ENABLED=false")
+		}
 	}
 
 	return config, nil

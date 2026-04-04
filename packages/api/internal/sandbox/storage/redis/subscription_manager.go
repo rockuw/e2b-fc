@@ -15,6 +15,7 @@ type subscriptionManager struct {
 
 	redisClient redis.UniversalClient
 	stop        chan struct{}
+	ready       chan struct{} // signals when PubSub subscription is active
 	once        sync.Once
 }
 
@@ -23,6 +24,7 @@ func newSubscriptionManager(redisClient redis.UniversalClient) *subscriptionMana
 		waiters:     make(map[string]map[chan struct{}]struct{}),
 		redisClient: redisClient,
 		stop:        make(chan struct{}),
+		ready:       make(chan struct{}),
 	}
 }
 
@@ -44,6 +46,9 @@ func (m *subscriptionManager) start(ctx context.Context) {
 
 	ps := m.redisClient.Subscribe(ctx, globalTransitionNotifyChannel)
 	defer ps.Close()
+
+	// Signal that the subscription is ready
+	close(m.ready)
 
 	ch := ps.Channel()
 	for {
@@ -97,6 +102,18 @@ func (m *subscriptionManager) dispatch(routingKey string) {
 		default:
 			// Waiter already has a pending signal; skip.
 		}
+	}
+}
+
+// waitReady blocks until the PubSub subscription is established or the
+// context is cancelled. It is useful for tests to ensure the subscription
+// is ready before publishing messages.
+func (m *subscriptionManager) waitReady(ctx context.Context) error {
+	select {
+	case <-m.ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

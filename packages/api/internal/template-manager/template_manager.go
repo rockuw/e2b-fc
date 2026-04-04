@@ -1,3 +1,4 @@
+//nolint:revive // package-naming: internal package
 package template_manager
 
 import (

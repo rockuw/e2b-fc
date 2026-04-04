@@ -1,3 +1,4 @@
+//nolint:revive // package-naming: utility package
 package utils
 
 // NoOpWriter is an io.Writer implementation that discards anything written to it.

@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feat/*]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - packages/api
+          - packages/shared
+          - packages/fc-provider
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+
+      - name: Download dependencies
+        working-directory: ${{ matrix.package }}
+        run: go mod download
+
+      - name: Run tests
+        working-directory: ${{ matrix.package }}
+        run: go test -v ./...
+        env:
+          FC_ACCESS_KEY_ID: ${{ secrets.FC_ACCESS_KEY_ID }}
+          FC_ACCESS_KEY_SECRET: ${{ secrets.FC_ACCESS_KEY_SECRET }}
+          FC_ACCOUNT_ID: ${{ secrets.FC_ACCOUNT_ID }}
+          FC_REGION: cn-shanghai
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: |
+          pip install -r tests/e2e/requirements.txt
+
+      - name: Run E2E tests
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          E2BFC_BASE_URL: ${{ vars.E2BFC_BASE_URL || 'http://localhost:8080' }}
+        run: |
+          # Build API binary first (downloads deps and compiles)
+          echo "Building API binary..."
+          cd packages/api
+          go mod download
+          go build -o /tmp/api-server .
+          cd ../..
+
+          # Start FC API server in background (requires FC secrets)
+          if [ -n "${{ secrets.FC_ACCESS_KEY_ID }}" ]; then
+            FC_ENABLED=true FC_ACCESS_KEY_ID=${{ secrets.FC_ACCESS_KEY_ID }} FC_ACCESS_KEY_SECRET=${{ secrets.FC_ACCESS_KEY_SECRET }} FC_ACCOUNT_ID=${{ secrets.FC_ACCOUNT_ID }} FC_REGION=cn-shanghai PORT=8080 /tmp/api-server &
+            API_PID=$!
+            echo "Started API server with PID: $API_PID"
+
+            # Wait for server to start (up to 60 seconds)
+            echo "Waiting for API server to start..."
+            for i in {1..60}; do
+              if curl -s http://localhost:8080/health > /dev/null 2>&1; then
+                echo "API server is ready!"
+                break
+              fi
+              sleep 1
+            done
+
+            # Show server logs if it didn't start
+            if ! curl -s http://localhost:8080/health > /dev/null 2>&1; then
+              echo "API server failed to start. Killing PID: $API_PID"
+              kill $API_PID 2>/dev/null || true
+              # Try to show any output
+              ps aux | grep api-server || true
+              exit 1
+            fi
+          fi
+
+          # Run E2E tests
+          E2B_API_URL=http://localhost:8080 pytest tests/e2e/test_e2b_sdk.py -v --tb=short
+          TEST_RESULT=$?
+
+          # Cleanup
+          if [ -n "$API_PID" ]; then
+            kill $API_PID 2>/dev/null || true
+          fi
+          exit $TEST_RESULT
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: packages/api

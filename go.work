@@ -9,6 +9,7 @@ use (
 	./packages/db
 	./packages/docker-reverse-proxy
 	./packages/envd
+	./packages/fc-provider
 	./packages/local-dev
 	./packages/nomad-nodepool-apm
 	./packages/orchestrator
