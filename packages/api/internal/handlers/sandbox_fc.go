@@ -100,6 +100,82 @@ func (h *SandboxHandlers) PostSandboxes(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
+// PostV2Sandboxes creates a new sandbox for v2 API (e2b SDK).
+// POST /v2/sandboxes
+func (h *SandboxHandlers) PostV2Sandboxes(c *gin.Context) {
+	var req api.NewSandbox
+	if err := c.ShouldBindJSON(&req); err != nil {
+		telemetry.ReportError(c.Request.Context(), "failed to parse request", err)
+		c.JSON(http.StatusBadRequest, api.Error{
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Invalid request: %s", err),
+		})
+
+		return
+	}
+
+	telemetry.ReportEvent(c.Request.Context(), "Parsed create sandbox request")
+
+	// Convert request to provider config
+	timeout := int32(3600) // Default 1 hour
+	if req.Timeout != nil {
+		timeout = *req.Timeout
+	}
+
+	// Convert metadata and envVars from pointer types
+	var metadata map[string]string
+	if req.Metadata != nil {
+		metadata = *req.Metadata
+	}
+
+	var envVars map[string]string
+	if req.EnvVars != nil {
+		envVars = *req.EnvVars
+	}
+
+	config := &provider.SandboxConfig{
+		TemplateID: req.TemplateID,
+		Timeout:    time.Duration(timeout) * time.Second,
+		Metadata:   metadata,
+		EnvVars:    envVars,
+	}
+
+	// Create sandbox via provider
+	info, err := h.provider.Create(c.Request.Context(), config)
+	if err != nil {
+		telemetry.ReportError(c.Request.Context(), "failed to create sandbox", err)
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to create sandbox: %s", err),
+		})
+
+		return
+	}
+
+	telemetry.ReportEvent(c.Request.Context(), "Created sandbox")
+
+	// Get connection info for access tokens
+	connInfo, err := h.provider.Connect(c.Request.Context(), info.SandboxID)
+	if err != nil {
+		telemetry.ReportError(c.Request.Context(), "failed to get connection info", err)
+		// Still return the sandbox, but without access tokens
+		connInfo = &provider.ConnectionInfo{}
+	}
+
+	// Convert to API response - v2 format
+	envdVersion := api.EnvdVersion("1.0.0")
+	response := api.Sandbox{
+		SandboxID:          info.SandboxID,
+		TemplateID:         info.TemplateID,
+		ClientID:           info.SandboxID, // Use sandbox ID as client ID for FC
+		EnvdVersion:        envdVersion,
+		EnvdAccessToken:    &connInfo.AccessToken,
+		TrafficAccessToken: &connInfo.AccessToken,
+	}
+
+	c.JSON(http.StatusCreated, response)
+}
+
 // GetV2Sandboxes lists sandboxes for v2 API (e2b SDK).
 // GET /v2/sandboxes
 func (h *SandboxHandlers) GetV2Sandboxes(c *gin.Context) {

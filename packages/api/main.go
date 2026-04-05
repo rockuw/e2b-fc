@@ -322,6 +322,7 @@ func runFCMode(
 	v2 := r.Group("/v2")
 	{
 		v2.GET("/sandboxes", sandboxHandlers.GetV2Sandboxes)
+		v2.POST("/sandboxes", sandboxHandlers.PostV2Sandboxes)
 	}
 
 	// Create HTTP server
