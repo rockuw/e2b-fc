@@ -4,7 +4,9 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -590,4 +592,207 @@ func (h *SandboxHandlers) GetSandboxesSandboxIDDir(c *gin.Context, sandboxID str
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// ConnectRPC proxies Connect RPC calls to the FC backend.
+// This handler is used by the e2b SDK to communicate with envd in the FC session.
+// The SDK sends requests to /connect.v1... and we proxy them to FC.
+// POST /connect.v1... or GET /connect.v1...
+func (h *SandboxHandlers) ConnectRPC(c *gin.Context) {
+	// Extract sandbox ID from headers
+	// The e2b SDK sends the sandbox ID in x-session-id or E2b-Sandbox-Id header
+	sandboxID := c.GetHeader("X-Session-Id")
+	if sandboxID == "" {
+		sandboxID = c.GetHeader("E2b-Sandbox-Id")
+	}
+	if sandboxID == "" {
+		// Also try X-E2b-Sandbox-Id (some variants use this)
+		sandboxID = c.GetHeader("X-E2b-Sandbox-Id")
+	}
+
+	if sandboxID == "" {
+		c.JSON(http.StatusBadRequest, api.Error{
+			Code:    http.StatusBadRequest,
+			Message: "Missing sandbox ID header (X-Session-Id or E2b-Sandbox-Id)",
+		})
+		return
+	}
+
+	// Get connection info from provider
+	connInfo, err := h.provider.Connect(c.Request.Context(), sandboxID)
+	if err != nil {
+		if errors.Is(err, provider.ErrSandboxNotFound) {
+			c.JSON(http.StatusNotFound, api.Error{
+				Code:    http.StatusNotFound,
+				Message: "Sandbox not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to connect to sandbox: %s", err),
+		})
+		return
+	}
+
+	// Build the target URL - append the original path to the FC endpoint
+	targetURL := connInfo.Endpoint + c.Request.URL.Path[1:] // Remove leading slash from path to avoid double slash
+	if c.Request.URL.RawQuery != "" {
+		targetURL += "?" + c.Request.URL.RawQuery
+	}
+
+	// Create proxy request
+	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, targetURL, c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to create proxy request: %s", err),
+		})
+		return
+	}
+
+	// Copy headers and add session header
+	for key, values := range c.Request.Header {
+		if key == "X-Session-Id" || key == "E2b-Sandbox-Id" || key == "X-E2b-Sandbox-Id" {
+			continue // Already using connInfo.SessionID
+		}
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+	// Ensure session ID is set
+	req.Header.Set("X-Session-Id", connInfo.SessionID)
+
+	// Execute request
+	client := &http.Client{Timeout: 300 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, api.Error{
+			Code:    http.StatusBadGateway,
+			Message: fmt.Sprintf("Failed to proxy request to sandbox: %s", err),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			c.Header(key, value)
+		}
+	}
+
+	// Read body content
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to read response: %s", err),
+		})
+		return
+	}
+
+	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
+}
+
+// EnvdAPI proxies Envd REST API calls to the FC backend.
+// The e2b SDK sends file operation requests to /files and we proxy them to FC.
+// The sandbox ID is passed in headers (X-Session-Id or E2b-Sandbox-Id).
+func (h *SandboxHandlers) EnvdAPI(c *gin.Context) {
+	// Extract sandbox ID from headers
+	sandboxID := c.GetHeader("X-Session-Id")
+	if sandboxID == "" {
+		sandboxID = c.GetHeader("E2b-Sandbox-Id")
+	}
+	if sandboxID == "" {
+		sandboxID = c.GetHeader("X-E2b-Sandbox-Id")
+	}
+
+	if sandboxID == "" {
+		c.JSON(http.StatusBadRequest, api.Error{
+			Code:    http.StatusBadRequest,
+			Message: "Missing sandbox ID header (X-Session-Id or E2b-Sandbox-Id)",
+		})
+		return
+	}
+
+	// Get connection info from provider
+	connInfo, err := h.provider.Connect(c.Request.Context(), sandboxID)
+	if err != nil {
+		if errors.Is(err, provider.ErrSandboxNotFound) {
+			c.JSON(http.StatusNotFound, api.Error{
+				Code:    http.StatusNotFound,
+				Message: "Sandbox not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to connect to sandbox: %s", err),
+		})
+		return
+	}
+
+	// Build the target URL - append /files to the FC endpoint
+	targetURL := strings.TrimSuffix(connInfo.Endpoint, "/") + "/files"
+	if c.Request.URL.RawQuery != "" {
+		targetURL += "?" + c.Request.URL.RawQuery
+	}
+
+	// Create proxy request
+	var body io.Reader
+	if c.Request.Body != nil {
+		body = c.Request.Body
+	}
+	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, targetURL, body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to create proxy request: %s", err),
+		})
+		return
+	}
+
+	// Copy headers and add session header
+	for key, values := range c.Request.Header {
+		if key == "X-Session-Id" || key == "E2b-Sandbox-Id" || key == "X-E2b-Sandbox-Id" {
+			continue // Already using connInfo.SessionID
+		}
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+	// Ensure session ID is set
+	req.Header.Set("X-Session-Id", connInfo.SessionID)
+
+	// Execute request
+	client := &http.Client{Timeout: 300 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, api.Error{
+			Code:    http.StatusBadGateway,
+			Message: fmt.Sprintf("Failed to proxy request to sandbox: %s", err),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			c.Header(key, value)
+		}
+	}
+
+	// Read body content
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to read response: %s", err),
+		})
+		return
+	}
+
+	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), respBody)
 }

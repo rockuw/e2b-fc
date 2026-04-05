@@ -325,6 +325,14 @@ func runFCMode(
 		v2.POST("/sandboxes", sandboxHandlers.PostV2Sandboxes)
 	}
 
+	// Connect RPC proxy for e2b SDK - proxies to FC backend
+	// SDK sends requests to /connect.v1/... and we proxy them to FC
+	r.Any("/connect.v1/*path", sandboxHandlers.ConnectRPC)
+
+	// Envd REST API proxy for e2b SDK - proxies file operations to FC
+	// SDK sends requests to /files for file operations
+	r.Any("/files", sandboxHandlers.EnvdAPI)
+
 	// Create HTTP server
 	srv := &http.Server{
 		Addr:              fmt.Sprintf("0.0.0.0:%d", port),
