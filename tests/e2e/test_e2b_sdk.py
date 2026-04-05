@@ -167,34 +167,136 @@ class TestSandboxCRUD:
 class TestSandboxFileSystem:
     """Test file system operations (Phase 2)."""
 
-    @pytest.mark.skip(reason="Phase 2 feature")
     def test_write_and_read_file(self, sandbox_client):
-        """Test writing and reading files."""
-        pass
+        """
+        Test: Write file and read it back.
 
-    @pytest.mark.skip(reason="Phase 2 feature")
+        Acceptance Criteria:
+        - Can write file to the sandbox
+        - Can read file from the sandbox
+        - Content matches what was written
+        """
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE, timeout=300)
+
+        try:
+            # Write file
+            test_content = "Hello, World!"
+            sandbox.files.write("/workspace/test.txt", test_content)
+
+            # Read it back
+            content = sandbox.files.read("/workspace/test.txt")
+            assert content == test_content
+        finally:
+            sandbox.kill()
+
     def test_file_exists(self, sandbox_client):
-        """Test checking if file exists."""
-        pass
+        """
+        Test: Check if file exists.
 
-    @pytest.mark.skip(reason="Phase 2 feature")
+        Acceptance Criteria:
+        - Can check if a file exists
+        - Returns True for existing files
+        - Returns False for non-existent files
+        """
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE, timeout=300)
+
+        try:
+            # Create a file
+            sandbox.files.write("/workspace/exists_test.txt", "test")
+
+            # Check exists
+            assert sandbox.files.exists("/workspace/exists_test.txt") is True
+            assert sandbox.files.exists("/workspace/non_existent.txt") is False
+        finally:
+            sandbox.kill()
+
     def test_list_directory(self, sandbox_client):
-        """Test listing directory contents."""
-        pass
+        """
+        Test: List directory contents.
+
+        Acceptance Criteria:
+        - Can list directory contents
+        - Returns file metadata (name, size, type)
+        """
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE, timeout=300)
+
+        try:
+            # Create some files
+            sandbox.files.write("/workspace/file1.txt", "content1")
+            sandbox.files.write("/workspace/file2.txt", "content2")
+
+            # List directory
+            entries = sandbox.files.list("/workspace")
+
+            # Verify entries
+            names = [e.name for e in entries]
+            assert "file1.txt" in names
+            assert "file2.txt" in names
+        finally:
+            sandbox.kill()
 
 
 class TestSandboxCommands:
     """Test terminal commands (Phase 2)."""
 
-    @pytest.mark.skip(reason="Phase 2 feature")
     def test_run_command_sync(self, sandbox_client):
-        """Test synchronous command execution."""
-        pass
+        """
+        Test: Run command synchronously.
 
-    @pytest.mark.skip(reason="Phase 2 feature")
-    def test_run_command_streaming(self, sandbox_client):
-        """Test streaming command output."""
-        pass
+        Acceptance Criteria:
+        - Can execute a command and receive stdout/stderr
+        - Command output is captured correctly
+        """
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE, timeout=300)
+
+        try:
+            # Run echo command
+            result = sandbox.commands.run("echo hello")
+
+            assert result.stdout.strip() == "hello"
+            assert result.exit_code == 0
+        finally:
+            sandbox.kill()
+
+    def test_run_command_with_timeout(self, sandbox_client):
+        """
+        Test: Command respects timeout settings.
+
+        Acceptance Criteria:
+        - Commands with timeout are killed after timeout
+        - Timeout returns appropriate exit code
+        """
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE, timeout=300)
+
+        try:
+            # Run a long-running command with short timeout
+            result = sandbox.commands.run("sleep 10", timeout=2)
+
+            # Command should be killed due to timeout
+            # Note: exit_code 124 is timeout in bash, or it may have been killed by signal
+            assert result.exit_code != 0
+        finally:
+            sandbox.kill()
+
+    def test_list_directory_via_command(self, sandbox_client):
+        """
+        Test: List directory via command execution.
+
+        Acceptance Criteria:
+        - Can execute ls command and verify files are listed
+        """
+        sandbox = sandbox_client.create(template=TEST_TEMPLATE, timeout=300)
+
+        try:
+            # Create a file first
+            sandbox.files.write("/workspace/cmd_test.txt", "test")
+
+            # Run ls command
+            result = sandbox.commands.run("ls /workspace")
+
+            assert "cmd_test.txt" in result.stdout
+        finally:
+            sandbox.kill()
 
 
 class TestCodeExecution:

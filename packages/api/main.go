@@ -304,13 +304,34 @@ func runFCMode(
 		sandboxes.DELETE("/:sandboxID", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
 			sandboxHandlers.DeleteSandboxesSandboxID(c, c.Param("sandboxID"))
 		})
+		sandboxes.POST("/:sandboxID/commands", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.PostSandboxesSandboxIDCommands(c, c.Param("sandboxID"))
+		})
+		sandboxes.GET("/:sandboxID/files", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.GetSandboxesSandboxIDFiles(c, c.Param("sandboxID"))
+		})
+		sandboxes.POST("/:sandboxID/files", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.PostSandboxesSandboxIDFiles(c, c.Param("sandboxID"))
+		})
+		sandboxes.GET("/:sandboxID/dir", func(c *gin.Context) { //nolint:contextcheck // gin handlers receive *gin.Context which has context embedded
+			sandboxHandlers.GetSandboxesSandboxIDDir(c, c.Param("sandboxID"))
+		})
 	}
 
 	// V2 endpoints for e2b SDK compatibility
 	v2 := r.Group("/v2")
 	{
 		v2.GET("/sandboxes", sandboxHandlers.GetV2Sandboxes)
+		v2.POST("/sandboxes", sandboxHandlers.PostV2Sandboxes)
 	}
+
+	// Connect RPC proxy for e2b SDK - proxies to FC backend
+	// SDK sends requests to /connect.v1/... and we proxy them to FC
+	r.Any("/connect.v1/*path", sandboxHandlers.ConnectRPC)
+
+	// Envd REST API proxy for e2b SDK - proxies file operations to FC
+	// SDK sends requests to /files for file operations
+	r.Any("/files", sandboxHandlers.EnvdAPI)
 
 	// Create HTTP server
 	srv := &http.Server{

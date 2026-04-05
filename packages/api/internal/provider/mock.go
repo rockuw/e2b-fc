@@ -28,6 +28,9 @@ type MockProvider struct {
 
 	// ConnectError can be set to return an error on Connect
 	ConnectError error
+
+	// RunCommandError can be set to return an error on RunCommand
+	RunCommandError error
 }
 
 // NewMockProvider creates a new mock provider.
@@ -170,4 +173,68 @@ func (m *MockProvider) Reset() {
 	m.DeleteError = nil
 	m.ListError = nil
 	m.ConnectError = nil
+	m.RunCommandError = nil
+}
+
+// RunCommand executes a command in the sandbox.
+func (m *MockProvider) RunCommand(_ context.Context, sandboxID string, config *CommandConfig) (*CommandResult, error) {
+	if m.RunCommandError != nil {
+		return nil, m.RunCommandError
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.sandboxes[sandboxID]; !ok {
+		return nil, ErrSandboxNotFound
+	}
+
+	// Mock implementation - return a simple success result
+	return &CommandResult{
+		ExitCode: 0,
+		Stdout:   "Mock command executed: " + config.Command,
+		Stderr:   "",
+	}, nil
+}
+
+// ReadFile reads a file from the sandbox.
+func (m *MockProvider) ReadFile(_ context.Context, sandboxID string, path string) ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.sandboxes[sandboxID]; !ok {
+		return nil, ErrSandboxNotFound
+	}
+
+	// Mock implementation
+	return []byte("Mock file content from: " + path), nil
+}
+
+// WriteFile writes content to a file in the sandbox.
+func (m *MockProvider) WriteFile(_ context.Context, sandboxID string, _ string, _ []byte) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.sandboxes[sandboxID]; !ok {
+		return ErrSandboxNotFound
+	}
+
+	// Mock implementation - always succeeds
+	return nil
+}
+
+// ListDir lists the contents of a directory in the sandbox.
+func (m *MockProvider) ListDir(_ context.Context, sandboxID string, path string) ([]*FileInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.sandboxes[sandboxID]; !ok {
+		return nil, ErrSandboxNotFound
+	}
+
+	// Mock implementation
+	return []*FileInfo{
+		{Name: "file1.txt", Path: path + "/file1.txt", IsDir: false, Size: 100},
+		{Name: "subdir", Path: path + "/subdir", IsDir: true, Size: 0},
+	}, nil
 }

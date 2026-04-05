@@ -103,6 +103,57 @@ type ListResult struct {
 	NextToken string
 }
 
+// CommandResult contains the result of a command execution.
+type CommandResult struct {
+	// ExitCode is the exit code of the process
+	ExitCode int32
+
+	// Stdout is the standard output of the process
+	Stdout string
+
+	// Stderr is the standard error of the process
+	Stderr string
+}
+
+// CommandConfig contains the configuration for running a command.
+type CommandConfig struct {
+	// Command is the command to execute
+	Command string
+
+	// Args are the command arguments
+	Args []string
+
+	// EnvVars are environment variables for the command
+	EnvVars map[string]string
+
+	// Cwd is the working directory
+	Cwd string
+
+	// Timeout is the command timeout
+	Timeout time.Duration
+}
+
+// FileInfo contains information about a file or directory.
+type FileInfo struct {
+	// Path is the full path to the file
+	Path string
+
+	// Name is the file name
+	Name string
+
+	// IsDir is true if this is a directory
+	IsDir bool
+
+	// Size is the file size in bytes
+	Size int64
+
+	// Mode is the file mode (permissions)
+	Mode int32
+
+	// ModifiedAt is when the file was last modified
+	ModifiedAt time.Time
+}
+
 // SandboxProvider is the interface for sandbox backend providers.
 // It abstracts the underlying infrastructure (Firecracker, FC Session, etc.)
 type SandboxProvider interface {
@@ -124,4 +175,20 @@ type SandboxProvider interface {
 	// Connect returns connection information for accessing a sandbox's envd.
 	// Returns ErrSandboxNotFound if the sandbox doesn't exist.
 	Connect(ctx context.Context, sandboxID string) (*ConnectionInfo, error)
+
+	// RunCommand executes a command in the sandbox and returns the result.
+	// Returns ErrSandboxNotFound if the sandbox doesn't exist.
+	RunCommand(ctx context.Context, sandboxID string, config *CommandConfig) (*CommandResult, error)
+
+	// ReadFile reads a file from the sandbox and returns its contents.
+	// Returns ErrSandboxNotFound if the sandbox doesn't exist.
+	ReadFile(ctx context.Context, sandboxID string, path string) ([]byte, error)
+
+	// WriteFile writes content to a file in the sandbox.
+	// Returns ErrSandboxNotFound if the sandbox doesn't exist.
+	WriteFile(ctx context.Context, sandboxID string, path string, content []byte) error
+
+	// ListDir lists the contents of a directory in the sandbox.
+	// Returns ErrSandboxNotFound if the sandbox doesn't exist.
+	ListDir(ctx context.Context, sandboxID string, path string) ([]*FileInfo, error)
 }
